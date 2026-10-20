@@ -58,6 +58,13 @@ main{max-width:720px;margin:0 auto;padding:16px}
 #btnZone{top:64px;right:12px;height:44px;padding:0 14px;font-size:15px}
 #btnDraw{top:168px;right:12px;height:44px;padding:0 14px;font-size:15px}
 .drawing #btnLayer,.drawing #btnZone,.drawing #btnDwg,.drawing #btnDraw,.drawing #gpsChip{display:none}
+#editBar{position:absolute;left:12px;right:12px;top:12px;max-width:560px;margin:0 auto;z-index:650;background:var(--surface);border-radius:14px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#editTitle{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px;margin:0 0 2px}
+#editInfo{font-size:14px;color:var(--muted);margin:0 0 8px}
+#editBar .acts{display:flex;gap:6px}#editBar .acts .btn{flex:1;min-height:44px}
+.vh{width:24px;height:24px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.5)}
+.vh.mid{width:18px;height:18px;background:#fff;border:3px solid #16232C}
+.pop-btn2{border:1.5px solid #16232C;background:#fff;color:#16232C;font-weight:600;border-radius:8px;padding:7px 14px;width:100%;margin-top:6px}
 #drawBar{position:absolute;left:12px;right:12px;top:12px;max-width:560px;margin:0 auto;z-index:650;background:var(--surface);border-radius:14px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 #drawBar .trtypes{display:flex;gap:6px;margin-bottom:8px}
 #drawBar .trtypes button{flex:1;min-height:44px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;gap:8px}
@@ -186,6 +193,10 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
 .projrow .pn{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;line-height:1.15}
 .projrow .pc{font-size:14px;color:var(--muted)}
 #kmlSheet .btn{margin-top:8px}
+.cpsug{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.cpsug button{text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:16px}
+.cpsug button small{display:block;color:var(--muted);font-size:13px}
+.cpsug .note{margin:0}.cpok{margin:0;font-size:14px;font-weight:600;color:var(--ok)}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#16232C;color:#fff;padding:12px 18px;border-radius:10px;font-weight:500;z-index:2000;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
 </style>
@@ -205,6 +216,11 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   <button class="mapbtn" id="btnZone">Guardar zona</button>
   <button class="mapbtn" id="btnDwg">Desenho / KML</button>
   <button class="mapbtn" id="btnDraw">Traçado</button>
+  <div id="editBar" hidden>
+    <p id="editTitle"></p>
+    <p id="editInfo"></p>
+    <div class="acts"><button class="btn" id="editCancel">Cancelar</button><button class="btn primary" id="editSave">Guardar</button></div>
+  </div>
   <div id="drawBar" hidden>
     <div class="trtypes" id="drawTypes" role="group" aria-label="Tipo de traçado"></div>
     <p id="drawInfo">Toca nos postes ou no mapa para desenhar.</p>
@@ -335,6 +351,14 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
       <button class="btn primary block" id="btnSaveProj">Guardar</button>
     </div>
     <div class="panel">
+      <h2>Base de códigos postais (CTT)</h2>
+      <p>Carrega o CTT_CP.txt (o mesmo do VALIDA). Nas moradas, a app sugere a rua e preenche o código postal e a localidade pelo nº de polícia. Fica guardada no dispositivo e funciona sem rede.</p>
+      <p class="note" id="cttInfo">Ainda não carregada.</p>
+      <div class="field"><label for="cttPre">Só códigos postais começados por (opcional, deixa o ficheiro mais leve)</label><input id="cttPre" type="text" inputmode="numeric" placeholder="ex.: 44 ou 4420, 4435"></div>
+      <label class="btn primary block"><input class="sr" type="file" accept=".txt,.csv,text/plain" id="inCtt">Carregar CTT_CP.txt</label>
+      <button class="btn danger block" id="btnCttDel" hidden>Remover base</button>
+    </div>
+    <div class="panel">
       <h2>Mapa Google</h2>
       <p>Cola aqui a tua chave da Google Maps Platform (com a Map Tiles API ativa). Fica guardada só neste dispositivo.</p>
       <div class="field"><label for="s-gkey">Chave API</label><input id="s-gkey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"></div>
@@ -363,6 +387,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   <button data-tab="proj">Projetos</button>
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<datalist id="ruaList"></datalist>
 <div id="updBar" hidden><span id="updTxt">Há uma versão nova da app.</span><button id="updBtn">Atualizar</button></div>
 
 <script>
@@ -500,7 +525,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v10";
+const APP_VERSION = "v12";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -536,6 +561,7 @@ const TYPES = {
   edificio: { label:"Edifício / morada", prefix:"ED", color:"--t-edificio", hex:"#7A3E8F", dxf:6, fields:[
     {k:"rua", l:"Rua", t:"text"},
     {k:"numero", l:"Nº de polícia", t:"text"},
+    {k:"cp", l:"Código postal", t:"text"},
     {k:"localidade", l:"Localidade", t:"text"},
     {k:"tipologia", l:"Tipologia", t:"seg", o:["Moradia","Edifício","Empresarial","Misto"]},
     {k:"fogos", l:"Nº de fogos / frações", t:"num"},
@@ -628,10 +654,10 @@ function show(view){
   if(view==="mapa"){ setTimeout(() => map.invalidateSize(), 50); $("#btnMarkHere").hidden = !$("#sheet").hidden || !$("#dwgSheet").hidden; }
   if(view==="lista") renderList();
   if(view==="export") renderExport();
-  if(view==="proj"){ renderProjList(); $("#s-tec").value = settings.tecnico; $("#s-gkey").value = settings.gkey || ""; }
+  if(view==="proj"){ renderProjList(); ensureCtt().then(renderCttInfo); $("#s-tec").value = settings.tecnico; $("#s-gkey").value = settings.gkey || ""; }
   if(view!=="mapa") scrollTo(0,0);
 }
-document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { cancelReloc(); if(drawing) endDraw(); hideSheet(); $("#dwgSheet").hidden = true; show(b.dataset.tab); }));
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { cancelReloc(); if(drawing) endDraw(); if(editMode) endEdit(); hideSheet(); $("#dwgSheet").hidden = true; show(b.dataset.tab); }));
 $("#fab").onclick = () => { returnTo = "lista"; openForm(null, gpsFix ? {lat:gpsFix.lat, lon:gpsFix.lon, acc:gpsFix.acc} : null); };
 function renderHeader(){ $("#hdrProj").textContent = (settings.verTodos ? "Todos os projetos" : (settings.projeto || "Sem projeto")) + " · " + APP_VERSION; }
 async function saveSettings(){ try { await DB.setKV("settings", settings); } catch {} }
@@ -696,9 +722,10 @@ function renderMarkers(){
     const m = L.circleMarker([r.lat, r.lon], { radius:9, color:"#fff", weight:2.5, fillColor:recColor(r), fillOpacity:1 });
     m.bindTooltip(esc(r.codigo), { permanent:true, direction:"right", offset:[8,0], className:"lbl" });
     const sub = r.tipo==="edificio" ? [r.campos?.rua, r.campos?.numero].filter(Boolean).join(" ") : (r.campos?.ref || r.campos?.tipo || "");
-    const html = `<div class="pop-code">${esc(r.codigo)}</div><div class="pop-meta">${esc(T.label)}${sub?" · "+esc(sub):""}</div><button class="pop-btn" data-open="${r.id}">Abrir registo</button><button class="pop-del" style="margin-top:6px" data-recdel="${r.id}">Apagar</button>`;
+    const html = `<div class="pop-code">${esc(r.codigo)}</div><div class="pop-meta">${esc(T.label)}${sub?" · "+esc(sub):""}</div><button class="pop-btn" data-open="${r.id}">Abrir registo</button><button class="pop-btn2" data-recmove="${r.id}">Mover</button><button class="pop-del" style="margin-top:6px" data-recdel="${r.id}">Apagar</button>`;
     m.on("click", ev => {
       L.DomEvent.stopPropagation(ev);
+      if(editMode) return;
       if(drawing){ addVertex([r.lat, r.lon], r.codigo); return; }
       if(reloc){ applyReloc(r.lat, r.lon); return; }
       L.popup({ offset:[0,-4] }).setLatLng([r.lat, r.lon]).setContent(html).openOn(map);
@@ -893,9 +920,15 @@ async function importKmlEditable(){
   const { name, items, zip } = kmlPending, now = new Date().toISOString(), proj = settings.projeto;
   let nr = 0, nt = 0, skip = 0;
   const OWN = { "E":"E-Redes", "M":"Município", "O":"Outro", "PT":"MEO/PTC" };
-  for(const it of items.filter(i => i.g === "P")){
+  for(const it0 of items.filter(i => i.g === "P")){
+    // nomes do tipo "E-835 | E-835_IT_3.JPG/E-835_IT_4.JPG": código antes da barra, o resto vai para observações
+    const parts = (it0.name || "").split(/\s*\|\s*/), extra = parts.slice(1).join(" | ");
+    const it = Object.assign({}, it0, { name: parts[0].trim() });
     const tipo = guessType(it), d = parseDesc(it.desc, tipo);
-    const codigo = (it.name || "").trim().toUpperCase() || nextCode(tipo, d.campos);
+    if(extra) d.obs = [d.obs, extra].filter(Boolean).join(" · ");
+    const fotoNomes = extra.split(/[\/,;|\s]+/).filter(x => /\.(jpe?g|png)$/i.test(x));
+    if(zip) fotoNomes.forEach(fn => { if(!d.imgs.includes(fn)){ const hit = zip.file(new RegExp("(^|/)" + fn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i"))[0]; if(hit) d.imgs.push(hit.name); } });
+    const codigo = it.name.toUpperCase() || nextCode(tipo, d.campos);
     if(records.some(r => r.tipo === tipo && r.codigo === codigo && (r.projeto||"") === proj)){ skip++; continue; }
     if(tipo === "poste" && !d.campos.proprietario){ const m = codigo.match(/^(PT|E|M|O)-\d+$/); if(m) d.campos.proprietario = OWN[m[1]]; }
     const fotos = [];
@@ -974,6 +1007,10 @@ $("#sheetTypes").querySelectorAll("button").forEach(b => b.onclick = () => { con
 $("#sheetCancel").onclick = hideSheet;
 
 map.on("click", e => {
+  if(editMode){
+    if(editMode.kind === "rec"){ const sn = nearestSnap(e.latlng); const ll = sn ? L.latLng(sn.ll[0], sn.ll[1]) : e.latlng; editMode.handle.setLatLng(ll); editMode.pos = [ll.lat, ll.lng]; recMoveInfo(); }
+    return;
+  }
   if(drawing){
     const nr = nearestRecord(e.latlng);
     if(nr){ addVertex(nr.ll, nr.code); return; }
@@ -1020,6 +1057,7 @@ function renderDrawTypes(){
   $("#drawTypes").querySelectorAll("button").forEach(b => b.onclick = () => { drawType = b.dataset.tr; settings.drawType = drawType; saveSettings(); renderDrawTypes(); updateDraw(); });
 }
 function startDraw(){
+  if(editMode) endEdit();
   hideSheet(); $("#dwgSheet").hidden = true; map.closePopup();
   drawing = true; drawPts = []; drawNos = []; drawType = settings.drawType || "edp";
   $("#v-mapa").classList.add("drawing"); $("#drawBar").hidden = false; $("#btnMarkHere").hidden = true;
@@ -1061,15 +1099,18 @@ function trPopup(t){
   const T = TRACE_TYPES[t.tipo], nos = (t.nos||[]).filter(Boolean);
   return `<div class="pop-code" style="color:${T.hex}">${esc(t.nome)}</div><div class="pop-meta">${T.label} · ${fmtLen(t.comprimento)} · ${t.pts.length} pontos${nos.length ? "<br>" + esc(nos.join(" → ")) : ""}</div>
     <div class="pop-tr">${Object.entries(TRACE_TYPES).map(([k,X]) => `<button data-trtype="${k}" data-trid="${t.id}" aria-pressed="${t.tipo===k}">${X.label}</button>`).join("")}</div>
+    <button class="pop-btn2" style="margin:0 0 6px" data-trmove="${t.id}">Mover / editar pontos</button>
     <button class="pop-del" data-trdel="${t.id}">Apagar traçado</button>`;
 }
 function renderTracados(){
   tracesLayer.clearLayers();
   TR().forEach(t => {
+    if(editMode?.kind === "tr" && editMode.id === t.id) return;
     const T = TRACE_TYPES[t.tipo] || TRACE_TYPES.outro;
     const line = L.polyline(t.pts, { color:T.hex, weight:4, opacity:.95 });
     line.on("click", ev => {
       L.DomEvent.stopPropagation(ev);
+      if(editMode) return;
       if(drawing){ const nr = nearestRecord(ev.latlng); addVertex(nr ? nr.ll : [ev.latlng.lat, ev.latlng.lng], nr ? nr.code : ""); return; }
       if(reloc) return;
       L.popup().setLatLng(ev.latlng).setContent(trPopup(t)).openOn(map);
@@ -1099,6 +1140,90 @@ map.on("popupopen", e => {
     try { await DB.del(r.id); } catch { toast("Não foi possível apagar."); return; }
     records = records.filter(x => x.id!==r.id); map.closePopup(); renderMarkers(); toast(`${r.codigo} apagado.`);
   };
+});
+
+/* ---------- Mover pontos e editar traçados ---------- */
+let editMode = null;
+const editLayer = L.layerGroup().addTo(map);
+const vIcon = col => L.divIcon({ className:"", html:`<div class="vh" style="background:${col}"></div>`, iconSize:[24,24], iconAnchor:[12,12] });
+const midIcon = L.divIcon({ className:"", html:'<div class="vh mid"></div>', iconSize:[18,18], iconAnchor:[9,9] });
+function showEditBar(title, info){
+  hideSheet(); $("#dwgSheet").hidden = true; map.closePopup();
+  $("#editTitle").textContent = title; $("#editInfo").textContent = info;
+  $("#v-mapa").classList.add("drawing"); $("#editBar").hidden = false; $("#btnMarkHere").hidden = true;
+}
+function endEdit(){
+  editMode = null; editLayer.clearLayers();
+  $("#editBar").hidden = true; $("#v-mapa").classList.remove("drawing"); $("#btnMarkHere").hidden = false;
+  renderMarkers(); renderTracados();
+}
+function startMoveRec(r){
+  if(drawing) endDraw();
+  editMode = { kind:"rec", id:r.id, pos:[r.lat, r.lon] };
+  const h = L.marker(editMode.pos, { icon:pinIcon, draggable:true, autoPan:true, zIndexOffset:1000 }).addTo(editLayer);
+  editMode.handle = h;
+  h.on("dragend", () => { const sn = nearestSnap(h.getLatLng()); if(sn) h.setLatLng(sn.ll); const ll = h.getLatLng(); editMode.pos = [ll.lat, ll.lng]; recMoveInfo(); });
+  showEditBar(`Mover ${r.codigo}`, ""); recMoveInfo();
+}
+function recMoveInfo(){
+  const r = records.find(x => x.id === editMode.id), d = haversine([r.lat, r.lon], editMode.pos);
+  $("#editInfo").textContent = d < 0.05 ? "Arrasta o pino ou toca no mapa na nova posição." : `Deslocado ${d < 10 ? d.toFixed(1).replace(".", ",") : Math.round(d)} m. Toca em Guardar para confirmar.`;
+}
+function startEditTr(t){
+  if(drawing) endDraw();
+  editMode = { kind:"tr", id:t.id, pts:t.pts.map(p => p.slice()), nos:(t.nos || t.pts.map(() => "")).slice() };
+  showEditBar(`Editar ${t.nome}`, ""); renderTracados(); renderTrEdit();
+}
+function snapPt(ll){
+  const nr = nearestRecord(ll); if(nr) return { p:nr.ll, no:nr.code };
+  const sn = nearestSnap(ll); return { p: sn ? sn.ll : [ll.lat, ll.lng], no:"" };
+}
+function renderTrEdit(){
+  const em = editMode, t = tracados.find(x => x.id === em.id), col = TRACE_TYPES[t.tipo].hex;
+  editLayer.clearLayers();
+  const line = L.polyline(em.pts, { color:col, weight:5, dashArray:"10 7", interactive:false }).addTo(editLayer);
+  em.pts.forEach((p, i) => {
+    const h = L.marker(p, { icon:vIcon(col), draggable:true, zIndexOffset:900 }).addTo(editLayer);
+    h.on("drag", () => { const ll = h.getLatLng(); em.pts[i] = [ll.lat, ll.lng]; line.setLatLngs(em.pts); });
+    h.on("dragend", () => { const s = snapPt(h.getLatLng()); em.pts[i] = [+s.p[0].toFixed(7), +s.p[1].toFixed(7)]; em.nos[i] = s.no; renderTrEdit(); });
+    h.on("click", ev => {
+      L.DomEvent.stopPropagation(ev);
+      if(em.pts.length <= 2){ toast("Um traçado precisa de pelo menos 2 pontos."); return; }
+      if(confirm(`Apagar o ponto ${i+1}${em.nos[i] ? " (" + em.nos[i] + ")" : ""} do traçado?`)){ em.pts.splice(i,1); em.nos.splice(i,1); renderTrEdit(); }
+    });
+  });
+  for(let i = 0; i < em.pts.length - 1; i++){
+    const a = em.pts[i], b = em.pts[i+1];
+    const m = L.marker([(a[0]+b[0])/2, (a[1]+b[1])/2], { icon:midIcon, draggable:true, opacity:.85 }).addTo(editLayer);
+    m.on("dragend", () => { const s = snapPt(m.getLatLng()); em.pts.splice(i+1, 0, [+s.p[0].toFixed(7), +s.p[1].toFixed(7)]); em.nos.splice(i+1, 0, s.no); renderTrEdit(); });
+  }
+  $("#editInfo").textContent = `${em.pts.length} pontos · ${fmtLen(lineLength(em.pts))} · arrasta os pontos; os pequenos brancos criam pontos novos; toca num ponto para o apagar.`;
+}
+$("#editCancel").onclick = endEdit;
+$("#editSave").onclick = async () => {
+  const em = editMode; if(!em) return;
+  const now = new Date().toISOString();
+  if(em.kind === "rec"){
+    const r = records.find(x => x.id === em.id), old = [r.lat, r.lon];
+    if(haversine(old, em.pos) < 0.05){ endEdit(); return; }
+    r.lat = +em.pos[0].toFixed(7); r.lon = +em.pos[1].toFixed(7); r.acc = null; r.atualizado = now;
+    try { await DB.put(r); } catch { toast("Não foi possível guardar."); return; }
+    // os traçados ligados a este ponto acompanham a mudança
+    let nlig = 0;
+    tracados.forEach(t => { let ch = false; t.pts.forEach((p, i) => { if(haversine(p, old) < 0.5){ t.pts[i] = [r.lat, r.lon]; (t.nos = t.nos || t.pts.map(() => ""))[i] = r.codigo; ch = true; } });
+      if(ch){ t.comprimento = Math.round(lineLength(t.pts)*10)/10; t.atualizado = now; nlig++; } });
+    if(nlig) await saveTracados();
+    endEdit(); toast(`${r.codigo} movido` + (nlig ? ` · ${nlig} traçado(s) acompanharam` : "") + ".");
+  } else {
+    const t = tracados.find(x => x.id === em.id);
+    t.pts = em.pts; t.nos = em.nos; t.comprimento = Math.round(lineLength(t.pts)*10)/10; t.atualizado = now;
+    await saveTracados(); endEdit(); toast(`${t.nome} guardado · ${fmtLen(t.comprimento)}`);
+  }
+};
+map.on("popupopen", e => {
+  const el = e.popup.getElement(); if(!el) return;
+  const rm = el.querySelector("[data-recmove]"); if(rm) rm.onclick = () => { const r = records.find(x => x.id === rm.dataset.recmove); if(r) startMoveRec(r); };
+  const tm = el.querySelector("[data-trmove]"); if(tm) tm.onclick = () => { const t = tracados.find(x => x.id === tm.dataset.trmove); if(t) startEditTr(t); };
 });
 
 /* GPS no mapa */
@@ -1275,6 +1400,7 @@ function renderDyn(){
     if(f.t==="seg") return `<div class="field"><span class="lbl" id="${id}-l">${esc(f.l)}</span><div class="seg" role="group" aria-labelledby="${id}-l" data-k="${f.k}">${f.o.map(o=>`<button type="button" data-v="${esc(o)}" aria-pressed="${v===o}">${esc(o)}</button>`).join("")}</div></div>`;
     return `<div class="field"><label for="${id}">${esc(f.l)}</label><input id="${id}" data-k="${f.k}" type="${f.t==="num"?"number":"text"}" ${f.t==="num"?'inputmode="decimal" step="any"':""} value="${esc(v)}"></div>`;
   }).join("");
+  if(editing.tipo === "edificio") hookCtt();
   $("#dynFields").querySelectorAll(".seg button").forEach(b => b.onclick = () => {
     const on = b.getAttribute("aria-pressed") !== "true";
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed","false"));
@@ -1363,6 +1489,133 @@ $("#btnDelete").onclick = async () => {
 /* =========================================================
    PROJETO
    ========================================================= */
+/* ---------- Base de códigos postais CTT (CTT_CP.txt, o mesmo do VALIDA) ---------- */
+let ctt = null, cttMeta = null; // ctt: false = sem base; objeto = base carregada em memória
+const ABBR = { r:"rua", av:"avenida", avda:"avenida", tv:"travessa", trav:"travessa", lg:"largo", lgo:"largo", pc:"praca", pr:"praca", estr:"estrada", bco:"beco",
+  cc:"calcada", calc:"calcada", cam:"caminho", qta:"quinta", urb:"urbanizacao", al:"alameda", rot:"rotunda", pq:"parque", dr:"doutor", eng:"engenheiro", sto:"santo", sta:"santa", prof:"professor" };
+const STOP = new Set(["de","da","do","das","dos","e"]);
+function cttNorm(s){
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,;:'"º°ª()\/\-]/g, " ")
+    .split(/\s+/).filter(Boolean).map(w => ABBR[w] || w).filter(w => !STOP.has(w)).join(" ");
+}
+async function decodeText(buf){
+  try { return new TextDecoder("utf-8", { fatal:true }).decode(buf); } catch { return new TextDecoder("windows-1252").decode(buf); }
+}
+async function parseCttFile(f, prefixes){
+  const txt = await decodeText(await f.arrayBuffer());
+  const lines = txt.split(/\r?\n/).filter(l => l.trim());
+  if(!lines.length) throw new Error("vazio");
+  let idx = { LOC:3, TIPO:5, P1:6, TIT:7, P2:8, DES:9, LOCAL:10, TROCO:11, PORTA:12, CP4:14, CP3:15, CPALF:16 };
+  const head = lines[0].split(";").map(x => x.trim().toUpperCase().replace(/^\uFEFF/, ""));
+  if(head.includes("CP4")){
+    const ix = n => head.indexOf(n);
+    idx = { LOC:ix("LOCALIDADE"), TIPO:ix("ART_TIPO"), P1:ix("PRI_PREP"), TIT:ix("ART_TITULO"), P2:ix("SEG_PREP"), DES:ix("ART_DESIG"), LOCAL:ix("ART_LOCAL"), TROCO:ix("TROCO"), PORTA:ix("PORTA"), CP4:ix("CP4"), CP3:ix("CP3"), CPALF:ix("CPALF") };
+    lines.shift();
+  } else if(head.length < 17) throw new Error("formato");
+  const rows = [];
+  for(const ln of lines){
+    const c = ln.split(";"), g = k => idx[k] >= 0 ? (c[idx[k]] || "").trim() : "";
+    const cp4 = g("CP4"), cp3 = g("CP3");
+    if(!/^\d{4}$/.test(cp4)) continue;
+    if(prefixes.length && !prefixes.some(p => cp4.startsWith(p))) continue;
+    const full = [g("TIPO"), g("P1"), g("TIT"), g("P2"), g("DES")].filter(Boolean).join(" ");
+    rows.push([full, cp4 + "-" + cp3.padStart(3, "0"), g("CPALF"), g("LOC"), g("LOCAL"), g("TROCO"), g("PORTA")]);
+  }
+  if(!rows.length) throw new Error(prefixes.length ? "filtro" : "formato");
+  return rows;
+}
+function buildCtt(rows){
+  const norms = rows.map(r => cttNorm(r[0])), locNorms = rows.map(r => cttNorm(r[4] || r[3]));
+  const sm = new Map();
+  rows.forEach((r, i) => { if(!r[0]) return; const k = norms[i]; if(!sm.has(k)) sm.set(k, { full:r[0], n:k, locs:new Set() }); sm.get(k).locs.add(r[2]); });
+  return { rows, norms, locNorms, streets:[...sm.values()] };
+}
+async function ensureCtt(){
+  if(ctt !== null) return;
+  try { const d = await DB.getKV("ctt"); if(d?.rows?.length){ ctt = buildCtt(d.rows); cttMeta = d.meta; } else ctt = false; } catch { ctt = false; }
+}
+function rangeScore(troco, porta, n){
+  const t = cttNorm(troco).replace(/\s+/g, " ");
+  if(porta){ const pn = parseInt(porta, 10); if(isNaN(n)) return 1; return pn === n ? 4 : 0; }
+  if(!t || isNaN(n)) return 1;
+  const odd = /impar/.test(t), even = !odd && /\bpar(es)?\b/.test(t);
+  if((odd && n % 2 === 0) || (even && n % 2 === 1)) return 0;
+  let m = t.match(/(\d+)\s+(?:a|ate)\s+(\d+)/); if(m) return n >= +m[1] && n <= +m[2] ? 3 : 0;
+  m = t.match(/(?:a partir|desde)\s+(\d+)/) || t.match(/(\d+)\s+(?:em diante|seguintes|ao fim|fim)/); if(m) return n >= +m[1] ? 2.5 : 0;
+  m = t.match(/ate\s+(\d+)/); if(m) return n <= +m[1] ? 2.5 : 0;
+  return (odd || even) ? 2 : 1;
+}
+function cttLookup(rua, numero, localidade){
+  if(!ctt) return [];
+  const nr = cttNorm(rua), nl = cttNorm(localidade), n = parseInt(numero, 10);
+  let cand = [];
+  if(nr){
+    ctt.norms.forEach((x, i) => { if(x && x === nr) cand.push(i); });
+    if(!cand.length) ctt.norms.forEach((x, i) => { if(x && nr.length > 4 && (x.includes(nr) || nr.includes(x))) cand.push(i); });
+  }
+  if(!cand.length && nl) ctt.rows.forEach((r, i) => { if(!r[0] && ctt.locNorms[i] === nl) cand.push(i); });
+  const best = new Map();
+  cand.forEach(i => {
+    const r = ctt.rows[i]; let sc = rangeScore(r[5], r[6], n); if(!sc) return;
+    if(nl && (cttNorm(r[2]) === nl || ctt.locNorms[i] === nl || cttNorm(r[3]) === nl)) sc += 0.5;
+    const k = r[1] + "|" + r[2], cur = best.get(k);
+    if(!cur || sc > cur.sc) best.set(k, { sc, cp:r[1], cpalf:r[2], rua:r[0], troco:[r[5], r[6]].filter(Boolean).join(" · "), lugar:r[4] || r[3] });
+  });
+  return [...best.values()].sort((a,b) => b.sc - a.sc).slice(0, 6);
+}
+function hookCtt(){
+  const rua = $("#d-rua"), num = $("#d-numero"), cp = $("#d-cp"), loc = $("#d-localidade");
+  if(!rua || !cp) return;
+  cp.closest(".field").insertAdjacentHTML("beforeend", '<div class="cpsug" id="cpSug"></div>');
+  rua.setAttribute("list", "ruaList"); rua.setAttribute("autocomplete", "off");
+  const box = $("#cpSug");
+  const apply = s => { cp.value = s.cp; loc.value = s.cpalf; if(s.rua) rua.value = s.rua;
+    box.innerHTML = `<p class="cpok">✓ ${esc(s.cp)} ${esc(s.cpalf)} · base CTT</p>`; };
+  const go = async () => {
+    await ensureCtt();
+    if(!ctt){ box.innerHTML = rua.value ? '<p class="note">Carrega a base CTT em Projetos para preencher o código postal automaticamente.</p>' : ""; return; }
+    if(!rua.value.trim() && !loc.value.trim()){ box.innerHTML = ""; return; }
+    const res = cttLookup(rua.value, num.value, loc.value);
+    if(!res.length){ box.innerHTML = '<p class="note">Rua não encontrada na base CTT. Confirma o nome ou escreve o código postal à mão.</p>'; return; }
+    const clear = res.length === 1 || res[0].sc > res[1].sc;
+    if(clear && (!cp.value || cp.value === res[0].cp)){ apply(res[0]); if(res.length === 1) return; }
+    box.innerHTML = (clear ? "" : '<p class="note">Vários códigos possíveis, escolhe:</p>') + res.slice(clear ? 1 : 0).map((s, i) =>
+      `<button type="button" data-i="${clear ? i+1 : i}"><b>${esc(s.cp)}</b> ${esc(s.cpalf)}<small>${esc(s.rua || s.lugar)}${s.troco ? " · " + esc(s.troco) : ""}</small></button>`).join("");
+    box.querySelectorAll("button").forEach(b => b.onclick = () => apply(res[+b.dataset.i]));
+  };
+  let tmr;
+  rua.addEventListener("input", async () => {
+    await ensureCtt(); if(!ctt) return;
+    const q = cttNorm(rua.value), dl = $("#ruaList");
+    if(q.length < 3){ dl.innerHTML = ""; return; }
+    const hits = ctt.streets.filter(s => s.n.includes(q)).slice(0, 30);
+    dl.innerHTML = hits.map(s => `<option value="${esc(s.full)}">${esc([...s.locs].slice(0,3).join(", "))}</option>`).join("");
+  });
+  rua.addEventListener("change", go); loc.addEventListener("change", go);
+  num.addEventListener("input", () => { clearTimeout(tmr); tmr = setTimeout(go, 450); });
+  if((rua.value || loc.value) && !cp.value) go();
+}
+function renderCttInfo(){
+  const has = cttMeta && ctt;
+  $("#cttInfo").textContent = has ? `Carregada: ${cttMeta.n.toLocaleString("pt-PT")} linhas (${cttMeta.ficheiro}${cttMeta.prefixos ? ", CP " + cttMeta.prefixos : ""}) em ${fmtDate(cttMeta.data)}.` : "Ainda não carregada.";
+  $("#btnCttDel").hidden = !has;
+}
+$("#inCtt").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  const prefixes = $("#cttPre").value.split(/[\s,;]+/).map(x => x.replace(/\D/g, "")).filter(Boolean);
+  $("#cttInfo").textContent = "A ler a base…";
+  try {
+    const rows = await parseCttFile(f, prefixes);
+    cttMeta = { n:rows.length, ficheiro:f.name, prefixos:prefixes.join(","), data:new Date().toISOString() };
+    await DB.setKV("ctt", { rows, meta:cttMeta }); ctt = buildCtt(rows); renderCttInfo();
+    toast(`Base CTT carregada: ${rows.length.toLocaleString("pt-PT")} linhas.`);
+  } catch(err){
+    ctt = null; await ensureCtt(); renderCttInfo();
+    toast(err.message === "filtro" ? "Nenhuma linha com esses códigos postais." : err.message === "formato" ? "Formato não reconhecido. Usa o CTT_CP.txt (todos_cp.txt dos CTT, separado por ;)." : "Não foi possível guardar a base neste dispositivo.");
+  }
+};
+$("#btnCttDel").onclick = async () => { if(!confirm("Remover a base CTT deste dispositivo?")) return; await DB.setKV("ctt", null); ctt = false; cttMeta = null; renderCttInfo(); toast("Base CTT removida."); };
+
 /* =========================================================
    PROJETOS
    ========================================================= */

@@ -57,7 +57,11 @@ main{max-width:720px;margin:0 auto;padding:16px}
 #btnLayer{top:12px;right:12px;height:44px;padding:0 14px;font-size:15px}
 #btnZone{top:64px;right:12px;height:44px;padding:0 14px;font-size:15px}
 #btnDraw{top:168px;right:12px;height:44px;padding:0 14px;font-size:15px}
-.drawing #btnLayer,.drawing #btnZone,.drawing #btnDwg,.drawing #btnDraw,.drawing #gpsChip{display:none}
+#btnNotas{top:220px;right:12px;height:44px;padding:0 14px;font-size:15px;background:#F0B400;color:#16232C}
+.note-ic{width:28px;height:28px;border-radius:7px;background:#F0B400;border:2.5px solid #16232C;color:#16232C;font:700 17px/23px Georgia,serif;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+#notasMenu .btn,#notaSheet .btnrow{margin-top:8px}
+#notaSheet{max-height:78%;overflow:auto}
+.drawing #btnLayer,.drawing #btnZone,.drawing #btnDwg,.drawing #btnDraw,.drawing #btnNotas,.drawing #gpsChip{display:none}
 #editBar{position:absolute;left:12px;right:12px;top:12px;max-width:560px;margin:0 auto;z-index:650;background:var(--surface);border-radius:14px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
 #editTitle{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px;margin:0 0 2px}
 #editInfo{font-size:14px;color:var(--muted);margin:0 0 8px}
@@ -66,13 +70,13 @@ main{max-width:720px;margin:0 auto;padding:16px}
 .vh.mid{width:18px;height:18px;background:#fff;border:3px solid #16232C}
 .pop-btn2{border:1.5px solid #16232C;background:#fff;color:#16232C;font-weight:600;border-radius:8px;padding:7px 14px;width:100%;margin-top:6px}
 #drawBar{position:absolute;left:12px;right:12px;top:12px;max-width:560px;margin:0 auto;z-index:650;background:var(--surface);border-radius:14px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
-#drawBar .trtypes{display:flex;gap:6px;margin-bottom:8px}
-#drawBar .trtypes button{flex:1;min-height:44px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;gap:8px}
-#drawBar .trtypes button i{width:22px;height:5px;border-radius:3px}
+#drawBar .trtypes{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px;margin-bottom:8px}
+#drawBar .trtypes button{min-height:44px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px}
+#drawBar .trtypes button i{width:24px;height:5px;border-radius:3px;flex:none}
 #drawBar .trtypes button[aria-pressed="true"]{border-color:var(--trc);box-shadow:inset 0 0 0 2px var(--trc)}
 #drawInfo{font-size:14px;color:var(--muted);margin:0 0 8px}
 #drawBar .acts{display:flex;gap:6px}#drawBar .acts .btn{flex:1;min-height:44px;padding:0 8px;font-size:16px}
-.pop-tr{display:flex;gap:4px;margin:6px 0}
+.pop-tr{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0}
 .pop-tr button{flex:1;border:2px solid #C9CFC6;background:#fff;border-radius:8px;padding:6px 4px;font-weight:600;font-size:13px}
 .pop-tr button[aria-pressed="true"]{border-color:#16232C;background:#16232C;color:#fff}
 .pop-del{border:1.5px solid #B3261E;background:transparent;color:#B3261E;font-weight:600;border-radius:8px;padding:7px 14px;width:100%}
@@ -216,6 +220,29 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   <button class="mapbtn" id="btnZone">Guardar zona</button>
   <button class="mapbtn" id="btnDwg">Desenho / KML</button>
   <button class="mapbtn" id="btnDraw">Traçado</button>
+  <button class="mapbtn" id="btnNotas">Notas</button>
+  <div class="sheet" id="notasMenu" hidden>
+    <h2>Notas</h2>
+    <p class="coords" id="notasCount"></p>
+    <button class="btn primary block" id="notaPonto">Novo ponto de nota (tocar no mapa)</button>
+    <button class="btn block" id="notaAqui">Nota na minha posição</button>
+    <button class="btn block" id="notaArea">Desenhar área</button>
+    <button class="btn block" id="notasToggle">Esconder notas do mapa</button>
+    <button class="btn block" id="notasClose">Fechar</button>
+  </div>
+  <div class="sheet" id="notaSheet" hidden>
+    <h2 id="notaHead">Nota</h2>
+    <p class="coords" id="notaSub"></p>
+    <div class="field"><label for="n-titulo">Título</label><input id="n-titulo" type="text" placeholder="ex.: Acesso pelo quintal, cão"></div>
+    <div class="field"><label for="n-texto">Informação</label><textarea id="n-texto" placeholder="O que é pertinente registar aqui…"></textarea></div>
+    <div class="photos" id="notaFotos"></div>
+    <div class="btnrow">
+      <label class="btn"><input class="sr" type="file" accept="image/*" capture="environment" id="nCam">Tirar foto</label>
+      <label class="btn"><input class="sr" type="file" accept="image/*" multiple id="nGal">Da galeria</label>
+    </div>
+    <div class="btnrow"><button class="btn" id="notaCancel">Cancelar</button><button class="btn primary" id="notaSave">Guardar nota</button></div>
+    <button class="btn danger block" id="notaDel" style="margin-top:8px" hidden>Apagar nota</button>
+  </div>
   <div id="editBar" hidden>
     <p id="editTitle"></p>
     <p id="editInfo"></p>
@@ -525,7 +552,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v12";
+const APP_VERSION = "v14";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -576,7 +603,10 @@ const TYPES = {
 /* Cor dos postes no mapa pelo proprietário: E-Redes vermelho, MEO/PTC azul, restantes castanho */
 const OWNER_COLORS = { "E-Redes":"#D7261E", "MEO/PTC":"#1F5FD1", "Município":"#8B5A2B", "Outro":"#8B5A2B" };
 const OWNER_DXF = { "E-Redes":1, "MEO/PTC":5, "Município":32, "Outro":32 };
-const recColor = r => (r.tipo==="poste" && OWNER_COLORS[r.campos?.proprietario]) || (TYPES[r.tipo] || TYPES.outro).hex;
+// Proprietário do poste: o escolhido na ficha ou, se estiver vazio, o indicado pelo prefixo do código (PT-, E-, M-, O-)
+const PREFIX_OWNER = { "PT":"MEO/PTC", "E":"E-Redes", "M":"Município", "O":"Outro" };
+const ownerOf = r => r.campos?.proprietario || PREFIX_OWNER[(String(r.codigo||"").toUpperCase().match(/^(PT|E|M|O)-\d+/) || [])[1]] || "";
+const recColor = r => (r.tipo==="poste" && OWNER_COLORS[ownerOf(r)]) || (TYPES[r.tipo] || TYPES.outro).hex;
 const ALL_KEYS = [];
 Object.values(TYPES).forEach(T => T.fields.forEach(f => { if(!ALL_KEYS.find(x=>x.k===f.k)) ALL_KEYS.push(f); }));
 
@@ -657,7 +687,7 @@ function show(view){
   if(view==="proj"){ renderProjList(); ensureCtt().then(renderCttInfo); $("#s-tec").value = settings.tecnico; $("#s-gkey").value = settings.gkey || ""; }
   if(view!=="mapa") scrollTo(0,0);
 }
-document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { cancelReloc(); if(drawing) endDraw(); if(editMode) endEdit(); hideSheet(); $("#dwgSheet").hidden = true; show(b.dataset.tab); }));
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { cancelReloc(); if(drawing) endDraw(); if(editMode) endEdit(); notaPick = false; $("#notasMenu").hidden = true; if(notaEdit) closeNota(); hideSheet(); $("#dwgSheet").hidden = true; show(b.dataset.tab); }));
 $("#fab").onclick = () => { returnTo = "lista"; openForm(null, gpsFix ? {lat:gpsFix.lat, lon:gpsFix.lon, acc:gpsFix.acc} : null); };
 function renderHeader(){ $("#hdrProj").textContent = (settings.verTodos ? "Todos os projetos" : (settings.projeto || "Sem projeto")) + " · " + APP_VERSION; }
 async function saveSettings(){ try { await DB.setKV("settings", settings); } catch {} }
@@ -909,12 +939,13 @@ function parseDesc(desc, tipo){
   return out;
 }
 function guessTrType(it){
-  const s = (it.folders.join(" ") + " " + it.name).toLowerCase();
-  if(/edp|e-redes|tr-edp/.test(s)) return "edp";
-  if(/\bpt\b|meo|tr-pt/.test(s)) return "pt";
-  if(it.color){ const r = parseInt(it.color.slice(1,3),16), g = parseInt(it.color.slice(3,5),16), b = parseInt(it.color.slice(5,7),16);
-    if(r > 150 && g < 110 && b < 110) return "edp"; if(b > 150 && r < 110) return "pt"; }
-  return "outro";
+  const s = (it.folders.join(" ") + " " + it.name).toLowerCase(), fach = /fachada|tr-f(edp|pt)/.test(s);
+  let t = "outro";
+  if(/edp|e-redes/.test(s)) t = "edp";
+  else if(/\bpt\b|meo|tr-pt|tr-fpt/.test(s)) t = "pt";
+  else if(it.color){ const r = parseInt(it.color.slice(1,3),16), g = parseInt(it.color.slice(3,5),16), b = parseInt(it.color.slice(5,7),16);
+    if(r > 150 && g < 140 && b < 140) t = "edp"; else if(b > 150 && r < 140) t = "pt"; }
+  return fach && t === "edp" ? "fedp" : fach && t === "pt" ? "fpt" : t;
 }
 async function importKmlEditable(){
   const { name, items, zip } = kmlPending, now = new Date().toISOString(), proj = settings.projeto;
@@ -1007,8 +1038,9 @@ $("#sheetTypes").querySelectorAll("button").forEach(b => b.onclick = () => { con
 $("#sheetCancel").onclick = hideSheet;
 
 map.on("click", e => {
+  if(notaPick){ notaPick = false; $("#relocBanner").hidden = true; openNota({ kind:"ponto", p:[+e.latlng.lat.toFixed(7), +e.latlng.lng.toFixed(7)] }); return; }
   if(editMode){
-    if(editMode.kind === "rec"){ const sn = nearestSnap(e.latlng); const ll = sn ? L.latLng(sn.ll[0], sn.ll[1]) : e.latlng; editMode.handle.setLatLng(ll); editMode.pos = [ll.lat, ll.lng]; recMoveInfo(); }
+    if(editMode.handle){ const sn = nearestSnap(e.latlng); const ll = sn ? L.latLng(sn.ll[0], sn.ll[1]) : e.latlng; editMode.handle.setLatLng(ll); editMode.pos = [ll.lat, ll.lng]; recMoveInfo(); }
     return;
   }
   if(drawing){
@@ -1025,13 +1057,16 @@ map.on("click", e => {
   showSheet(ll.lat, ll.lng, null, sn);
 });
 
-/* ---------- Traçados (EDP / PT / Outros) ---------- */
+/* ---------- Traçados (Aéreo/Fachada EDP e PT, Outros) e áreas de notas ---------- */
 const TRACE_TYPES = {
-  edp:   { label:"EDP",    hex:"#D7261E", dxf:1,  pre:"TR-EDP" },
-  pt:    { label:"PT",     hex:"#1F5FD1", dxf:5,  pre:"TR-PT" },
-  outro: { label:"Outros", hex:"#8B5A2B", dxf:32, pre:"TR-OUT" }
+  edp:   { label:"Aéreo EDP",   short:"Aéreo EDP",   hex:"#D7261E", kml:"#D7261E", dxf:1,  pre:"TR-EDP",  dash:null },
+  fedp:  { label:"Fachada EDP", short:"Fachada EDP", hex:"#D7261E", kml:"#FF8A7A", dxf:1,  pre:"TR-FEDP", dash:"9 7" },
+  pt:    { label:"Aéreo PT",    short:"Aéreo PT",    hex:"#1F5FD1", kml:"#1F5FD1", dxf:5,  pre:"TR-PT",   dash:null },
+  fpt:   { label:"Fachada PT",  short:"Fachada PT",  hex:"#1F5FD1", kml:"#7FA8F0", dxf:5,  pre:"TR-FPT",  dash:"9 7" },
+  outro: { label:"Outros",      short:"Outros",      hex:"#8B5A2B", kml:"#8B5A2B", dxf:32, pre:"TR-OUT",  dash:null }
 };
-let tracados = [], drawing = false, drawType = "edp", drawPts = [], drawNos = [], drawLine = null;
+const NOTE_COLOR = "#F0B400";
+let tracados = [], drawing = false, drawKind = "tr", drawType = "edp", drawPts = [], drawNos = [], drawLine = null;
 const tracesLayer = L.layerGroup().addTo(map);
 const drawVerts = L.layerGroup().addTo(map);
 function haversine(a, b){
@@ -1041,6 +1076,13 @@ function haversine(a, b){
 }
 const lineLength = pts => pts.reduce((s,p,i) => i ? s + haversine(pts[i-1], p) : 0, 0);
 const fmtLen = m => m < 1000 ? `${Math.round(m)} m` : `${(m/1000).toFixed(2).replace(".", ",")} km`;
+function polyArea(pts){ // m², em PT-TM06
+  if(pts.length < 3) return 0;
+  const q = pts.map(p => toPTTM06(p[0], p[1])); let a = 0;
+  q.forEach((p,i) => { const n = q[(i+1) % q.length]; a += p.x*n.y - n.x*p.y; });
+  return Math.abs(a/2);
+}
+const fmtArea = m2 => m2 < 10000 ? `${Math.round(m2).toLocaleString("pt-PT")} m²` : `${(m2/10000).toFixed(2).replace(".", ",")} ha`;
 async function saveTracados(){ try { await DB.setKV("tracados", tracados); } catch { toast("Não foi possível guardar o traçado."); } }
 function nextTrName(tipo){
   const pre = TRACE_TYPES[tipo].pre + "-"; let max = 0;
@@ -1052,31 +1094,36 @@ function nearestRecord(latlng){
   PR().forEach(r => { if(r.lat==null) return; const q = map.latLngToContainerPoint([r.lat, r.lon]), d = (q.x-pc.x)**2 + (q.y-pc.y)**2; if(d < bd){ bd = d; best = { ll:[r.lat, r.lon], code:r.codigo }; } });
   return best;
 }
+const trSwatch = T => `<i style="background:${T.dash ? `repeating-linear-gradient(90deg,${T.hex} 0 6px,transparent 6px 10px)` : T.hex}"></i>`;
 function renderDrawTypes(){
-  $("#drawTypes").innerHTML = Object.entries(TRACE_TYPES).map(([k,T]) => `<button data-tr="${k}" style="--trc:${T.hex}" aria-pressed="${drawType===k}"><i style="background:${T.hex}"></i>${T.label}</button>`).join("");
+  $("#drawTypes").hidden = drawKind !== "tr";
+  $("#drawTypes").innerHTML = Object.entries(TRACE_TYPES).map(([k,T]) => `<button data-tr="${k}" style="--trc:${T.hex}" aria-pressed="${drawType===k}">${trSwatch(T)}${T.short}</button>`).join("");
   $("#drawTypes").querySelectorAll("button").forEach(b => b.onclick = () => { drawType = b.dataset.tr; settings.drawType = drawType; saveSettings(); renderDrawTypes(); updateDraw(); });
 }
-function startDraw(){
+function startDraw(kind){
   if(editMode) endEdit();
-  hideSheet(); $("#dwgSheet").hidden = true; map.closePopup();
-  drawing = true; drawPts = []; drawNos = []; drawType = settings.drawType || "edp";
+  hideSheet(); $("#dwgSheet").hidden = true; $("#notasMenu").hidden = true; map.closePopup();
+  drawing = true; drawKind = kind === "area" ? "area" : "tr"; drawPts = []; drawNos = [];
+  drawType = TRACE_TYPES[settings.drawType] ? settings.drawType : "edp";
   $("#v-mapa").classList.add("drawing"); $("#drawBar").hidden = false; $("#btnMarkHere").hidden = true;
   renderDrawTypes(); updateDraw();
 }
 function addVertex(ll, no){
   const last = drawPts[drawPts.length-1];
-  if(last && haversine(last, ll) < 0.05) return; // o mesmo ponto duas vezes seguidas
+  if(last && haversine(last, ll) < 0.05) return;
   drawPts.push([+(+ll[0]).toFixed(7), +(+ll[1]).toFixed(7)]); drawNos.push(no || ""); updateDraw();
 }
 function updateDraw(){
   if(drawLine){ map.removeLayer(drawLine); drawLine = null; }
   drawVerts.clearLayers();
-  const col = TRACE_TYPES[drawType].hex;
-  if(drawPts.length > 1) drawLine = L.polyline(drawPts, { color:col, weight:5, dashArray:"10 7", interactive:false }).addTo(map);
+  const area = drawKind === "area", col = area ? NOTE_COLOR : TRACE_TYPES[drawType].hex;
+  if(area && drawPts.length > 2) drawLine = L.polygon(drawPts, { color:col, weight:3, dashArray:"6 5", fillColor:col, fillOpacity:.2, interactive:false }).addTo(map);
+  else if(drawPts.length > 1) drawLine = L.polyline(drawPts, { color:col, weight:5, dashArray:"10 7", interactive:false }).addTo(map);
   drawPts.forEach((p,i) => L.circleMarker(p, { radius: drawNos[i] ? 7 : 5, color:"#fff", weight:2, fillColor:col, fillOpacity:1, interactive:false }).addTo(drawVerts));
   const nos = drawNos.filter(Boolean);
-  $("#drawInfo").textContent = drawPts.length ? `${drawPts.length} pontos · ${fmtLen(lineLength(drawPts))}` + (nos.length ? ` · ${nos.join(" → ")}` : "") : "Toca nos postes ou no mapa para desenhar.";
-  $("#drawDone").disabled = drawPts.length < 2; $("#drawUndo").disabled = !drawPts.length;
+  if(area) $("#drawInfo").textContent = drawPts.length ? `Área de nota · ${drawPts.length} pontos` + (drawPts.length > 2 ? ` · ${fmtArea(polyArea(drawPts))}` : " · faltam pontos") : "Área de nota: toca no mapa à volta da zona (mínimo 3 pontos).";
+  else $("#drawInfo").textContent = drawPts.length ? `${TRACE_TYPES[drawType].label} · ${drawPts.length} pontos · ${fmtLen(lineLength(drawPts))}` + (nos.length ? ` · ${nos.join(" → ")}` : "") : "Toca nos postes ou no mapa para desenhar.";
+  $("#drawDone").disabled = drawPts.length < (area ? 3 : 2); $("#drawUndo").disabled = !drawPts.length;
 }
 function endDraw(){
   drawing = false; drawPts = []; drawNos = [];
@@ -1084,10 +1131,14 @@ function endDraw(){
   drawVerts.clearLayers();
   $("#v-mapa").classList.remove("drawing"); $("#drawBar").hidden = true; $("#btnMarkHere").hidden = false;
 }
-$("#btnDraw").onclick = startDraw;
+$("#btnDraw").onclick = () => startDraw("tr");
 $("#drawUndo").onclick = () => { drawPts.pop(); drawNos.pop(); updateDraw(); };
-$("#drawCancel").onclick = () => { if(drawPts.length > 1 && !confirm("Descartar este traçado?")) return; endDraw(); };
+$("#drawCancel").onclick = () => { if(drawPts.length > 1 && !confirm("Descartar o que desenhaste?")) return; endDraw(); };
 $("#drawDone").onclick = async () => {
+  if(drawKind === "area"){
+    if(drawPts.length < 3) return;
+    const pts = drawPts.slice(); endDraw(); openNota({ kind:"area", pts }); return;
+  }
   if(drawPts.length < 2) return;
   const now = new Date().toISOString();
   const t = { id:uid(), nome:nextTrName(drawType), tipo:drawType, pts:drawPts.slice(), nos:drawNos.slice(),
@@ -1096,9 +1147,9 @@ $("#drawDone").onclick = async () => {
   toast(`${t.nome} guardado · ${fmtLen(t.comprimento)}`);
 };
 function trPopup(t){
-  const T = TRACE_TYPES[t.tipo], nos = (t.nos||[]).filter(Boolean);
+  const T = TRACE_TYPES[t.tipo] || TRACE_TYPES.outro, nos = (t.nos||[]).filter(Boolean);
   return `<div class="pop-code" style="color:${T.hex}">${esc(t.nome)}</div><div class="pop-meta">${T.label} · ${fmtLen(t.comprimento)} · ${t.pts.length} pontos${nos.length ? "<br>" + esc(nos.join(" → ")) : ""}</div>
-    <div class="pop-tr">${Object.entries(TRACE_TYPES).map(([k,X]) => `<button data-trtype="${k}" data-trid="${t.id}" aria-pressed="${t.tipo===k}">${X.label}</button>`).join("")}</div>
+    <div class="pop-tr">${Object.entries(TRACE_TYPES).map(([k,X]) => `<button data-trtype="${k}" data-trid="${t.id}" aria-pressed="${t.tipo===k}">${X.short}</button>`).join("")}</div>
     <button class="pop-btn2" style="margin:0 0 6px" data-trmove="${t.id}">Mover / editar pontos</button>
     <button class="pop-del" data-trdel="${t.id}">Apagar traçado</button>`;
 }
@@ -1107,7 +1158,7 @@ function renderTracados(){
   TR().forEach(t => {
     if(editMode?.kind === "tr" && editMode.id === t.id) return;
     const T = TRACE_TYPES[t.tipo] || TRACE_TYPES.outro;
-    const line = L.polyline(t.pts, { color:T.hex, weight:4, opacity:.95 });
+    const line = L.polyline(t.pts, { color:T.hex, weight:4, opacity:.95, dashArray:T.dash || null });
     line.on("click", ev => {
       L.DomEvent.stopPropagation(ev);
       if(editMode) return;
@@ -1132,72 +1183,71 @@ function bindTrPopup(popup){
   };
 }
 map.on("popupopen", e => bindTrPopup(e.popup));
-map.on("popupopen", e => {
-  const b = e.popup.getElement()?.querySelector("[data-recdel]"); if(!b) return;
-  b.onclick = async () => {
-    const r = records.find(x => x.id===b.dataset.recdel); if(!r) return;
-    if(!confirm(`Apagar ${r.codigo}${r.fotos?.length ? ` e as ${r.fotos.length} fotos` : ""}? Esta ação não se desfaz.`)) return;
-    try { await DB.del(r.id); } catch { toast("Não foi possível apagar."); return; }
-    records = records.filter(x => x.id!==r.id); map.closePopup(); renderMarkers(); toast(`${r.codigo} apagado.`);
-  };
-});
 
-/* ---------- Mover pontos e editar traçados ---------- */
+/* ---------- Mover pontos (registos e notas) e editar vértices (traçados e áreas) ---------- */
 let editMode = null;
 const editLayer = L.layerGroup().addTo(map);
 const vIcon = col => L.divIcon({ className:"", html:`<div class="vh" style="background:${col}"></div>`, iconSize:[24,24], iconAnchor:[12,12] });
 const midIcon = L.divIcon({ className:"", html:'<div class="vh mid"></div>', iconSize:[18,18], iconAnchor:[9,9] });
-function showEditBar(title, info){
-  hideSheet(); $("#dwgSheet").hidden = true; map.closePopup();
-  $("#editTitle").textContent = title; $("#editInfo").textContent = info;
+function showEditBar(title){
+  hideSheet(); $("#dwgSheet").hidden = true; $("#notasMenu").hidden = true; map.closePopup();
+  $("#editTitle").textContent = title; $("#editInfo").textContent = "";
   $("#v-mapa").classList.add("drawing"); $("#editBar").hidden = false; $("#btnMarkHere").hidden = true;
 }
 function endEdit(){
   editMode = null; editLayer.clearLayers();
   $("#editBar").hidden = true; $("#v-mapa").classList.remove("drawing"); $("#btnMarkHere").hidden = false;
-  renderMarkers(); renderTracados();
+  renderMarkers(); renderTracados(); renderNotas();
 }
-function startMoveRec(r){
+function startMovePoint(kind, obj, title){
   if(drawing) endDraw();
-  editMode = { kind:"rec", id:r.id, pos:[r.lat, r.lon] };
-  const h = L.marker(editMode.pos, { icon:pinIcon, draggable:true, autoPan:true, zIndexOffset:1000 }).addTo(editLayer);
+  const pos = kind === "rec" ? [obj.lat, obj.lon] : obj.p.slice();
+  editMode = { kind, id:obj.id, orig:pos.slice(), pos };
+  const h = L.marker(pos, { icon:pinIcon, draggable:true, autoPan:true, zIndexOffset:1000 }).addTo(editLayer);
   editMode.handle = h;
   h.on("dragend", () => { const sn = nearestSnap(h.getLatLng()); if(sn) h.setLatLng(sn.ll); const ll = h.getLatLng(); editMode.pos = [ll.lat, ll.lng]; recMoveInfo(); });
-  showEditBar(`Mover ${r.codigo}`, ""); recMoveInfo();
+  showEditBar(title); renderNotas(); recMoveInfo();
 }
+const startMoveRec = r => startMovePoint("rec", r, `Mover ${r.codigo}`);
 function recMoveInfo(){
-  const r = records.find(x => x.id === editMode.id), d = haversine([r.lat, r.lon], editMode.pos);
+  const d = haversine(editMode.orig, editMode.pos);
   $("#editInfo").textContent = d < 0.05 ? "Arrasta o pino ou toca no mapa na nova posição." : `Deslocado ${d < 10 ? d.toFixed(1).replace(".", ",") : Math.round(d)} m. Toca em Guardar para confirmar.`;
 }
-function startEditTr(t){
+function startEditVerts(kind, obj){
   if(drawing) endDraw();
-  editMode = { kind:"tr", id:t.id, pts:t.pts.map(p => p.slice()), nos:(t.nos || t.pts.map(() => "")).slice() };
-  showEditBar(`Editar ${t.nome}`, ""); renderTracados(); renderTrEdit();
+  const closed = kind === "area";
+  editMode = { kind, id:obj.id, closed, pts:obj.pts.map(p => p.slice()), nos:(obj.nos || obj.pts.map(() => "")).slice(),
+               col: closed ? NOTE_COLOR : (TRACE_TYPES[obj.tipo] || TRACE_TYPES.outro).hex };
+  showEditBar(`Editar ${closed ? (obj.titulo || "área") : obj.nome}`); renderTracados(); renderNotas(); renderVertEdit();
 }
+const startEditTr = t => startEditVerts("tr", t);
 function snapPt(ll){
   const nr = nearestRecord(ll); if(nr) return { p:nr.ll, no:nr.code };
   const sn = nearestSnap(ll); return { p: sn ? sn.ll : [ll.lat, ll.lng], no:"" };
 }
-function renderTrEdit(){
-  const em = editMode, t = tracados.find(x => x.id === em.id), col = TRACE_TYPES[t.tipo].hex;
+function renderVertEdit(){
+  const em = editMode, col = em.col, min = em.closed ? 3 : 2;
   editLayer.clearLayers();
-  const line = L.polyline(em.pts, { color:col, weight:5, dashArray:"10 7", interactive:false }).addTo(editLayer);
+  const shape = em.closed
+    ? L.polygon(em.pts, { color:col, weight:3, dashArray:"10 7", fillColor:col, fillOpacity:.15, interactive:false }).addTo(editLayer)
+    : L.polyline(em.pts, { color:col, weight:5, dashArray:"10 7", interactive:false }).addTo(editLayer);
   em.pts.forEach((p, i) => {
     const h = L.marker(p, { icon:vIcon(col), draggable:true, zIndexOffset:900 }).addTo(editLayer);
-    h.on("drag", () => { const ll = h.getLatLng(); em.pts[i] = [ll.lat, ll.lng]; line.setLatLngs(em.pts); });
-    h.on("dragend", () => { const s = snapPt(h.getLatLng()); em.pts[i] = [+s.p[0].toFixed(7), +s.p[1].toFixed(7)]; em.nos[i] = s.no; renderTrEdit(); });
+    h.on("drag", () => { const ll = h.getLatLng(); em.pts[i] = [ll.lat, ll.lng]; shape.setLatLngs(em.pts); });
+    h.on("dragend", () => { const s = snapPt(h.getLatLng()); em.pts[i] = [+s.p[0].toFixed(7), +s.p[1].toFixed(7)]; em.nos[i] = s.no; renderVertEdit(); });
     h.on("click", ev => {
       L.DomEvent.stopPropagation(ev);
-      if(em.pts.length <= 2){ toast("Um traçado precisa de pelo menos 2 pontos."); return; }
-      if(confirm(`Apagar o ponto ${i+1}${em.nos[i] ? " (" + em.nos[i] + ")" : ""} do traçado?`)){ em.pts.splice(i,1); em.nos.splice(i,1); renderTrEdit(); }
+      if(em.pts.length <= min){ toast(`Precisa de pelo menos ${min} pontos.`); return; }
+      if(confirm(`Apagar o ponto ${i+1}${em.nos[i] ? " (" + em.nos[i] + ")" : ""}?`)){ em.pts.splice(i,1); em.nos.splice(i,1); renderVertEdit(); }
     });
   });
-  for(let i = 0; i < em.pts.length - 1; i++){
-    const a = em.pts[i], b = em.pts[i+1];
+  const segs = em.closed ? em.pts.length : em.pts.length - 1;
+  for(let i = 0; i < segs; i++){
+    const a = em.pts[i], b = em.pts[(i+1) % em.pts.length];
     const m = L.marker([(a[0]+b[0])/2, (a[1]+b[1])/2], { icon:midIcon, draggable:true, opacity:.85 }).addTo(editLayer);
-    m.on("dragend", () => { const s = snapPt(m.getLatLng()); em.pts.splice(i+1, 0, [+s.p[0].toFixed(7), +s.p[1].toFixed(7)]); em.nos.splice(i+1, 0, s.no); renderTrEdit(); });
+    m.on("dragend", () => { const s = snapPt(m.getLatLng()); em.pts.splice(i+1, 0, [+s.p[0].toFixed(7), +s.p[1].toFixed(7)]); em.nos.splice(i+1, 0, s.no); renderVertEdit(); });
   }
-  $("#editInfo").textContent = `${em.pts.length} pontos · ${fmtLen(lineLength(em.pts))} · arrasta os pontos; os pequenos brancos criam pontos novos; toca num ponto para o apagar.`;
+  $("#editInfo").textContent = `${em.pts.length} pontos · ${em.closed ? fmtArea(polyArea(em.pts)) : fmtLen(lineLength(em.pts))} · arrasta os pontos; os brancos criam pontos novos; toca num ponto para o apagar.`;
 }
 $("#editCancel").onclick = endEdit;
 $("#editSave").onclick = async () => {
@@ -1208,12 +1258,17 @@ $("#editSave").onclick = async () => {
     if(haversine(old, em.pos) < 0.05){ endEdit(); return; }
     r.lat = +em.pos[0].toFixed(7); r.lon = +em.pos[1].toFixed(7); r.acc = null; r.atualizado = now;
     try { await DB.put(r); } catch { toast("Não foi possível guardar."); return; }
-    // os traçados ligados a este ponto acompanham a mudança
     let nlig = 0;
     tracados.forEach(t => { let ch = false; t.pts.forEach((p, i) => { if(haversine(p, old) < 0.5){ t.pts[i] = [r.lat, r.lon]; (t.nos = t.nos || t.pts.map(() => ""))[i] = r.codigo; ch = true; } });
       if(ch){ t.comprimento = Math.round(lineLength(t.pts)*10)/10; t.atualizado = now; nlig++; } });
     if(nlig) await saveTracados();
     endEdit(); toast(`${r.codigo} movido` + (nlig ? ` · ${nlig} traçado(s) acompanharam` : "") + ".");
+  } else if(em.kind === "nota"){
+    const n = notas.find(x => x.id === em.id); n.p = [+em.pos[0].toFixed(7), +em.pos[1].toFixed(7)]; n.atualizado = now;
+    await saveNotas(); endEdit(); toast("Nota movida.");
+  } else if(em.kind === "area"){
+    const n = notas.find(x => x.id === em.id); n.pts = em.pts; n.area = Math.round(polyArea(n.pts)); n.atualizado = now;
+    await saveNotas(); endEdit(); toast(`Área guardada · ${fmtArea(n.area)}`);
   } else {
     const t = tracados.find(x => x.id === em.id);
     t.pts = em.pts; t.nos = em.nos; t.comprimento = Math.round(lineLength(t.pts)*10)/10; t.atualizado = now;
@@ -1225,6 +1280,98 @@ map.on("popupopen", e => {
   const rm = el.querySelector("[data-recmove]"); if(rm) rm.onclick = () => { const r = records.find(x => x.id === rm.dataset.recmove); if(r) startMoveRec(r); };
   const tm = el.querySelector("[data-trmove]"); if(tm) tm.onclick = () => { const t = tracados.find(x => x.id === tm.dataset.trmove); if(t) startEditTr(t); };
 });
+
+/* ---------- NOTAS: pontos de informação e áreas, com texto e fotos ---------- */
+let notas = [], notaPick = false, notaEdit = null;
+const notesLayer = L.layerGroup().addTo(map);
+const NI = () => notas.filter(inProj);
+const noteIcon = L.divIcon({ className:"", html:'<div class="note-ic">i</div>', iconSize:[28,28], iconAnchor:[14,14] });
+async function saveNotas(){ try { await DB.setKV("notas", notas); } catch { toast("Não foi possível guardar a nota (espaço cheio?)."); } }
+function notaPopup(n){
+  const sub = n.kind === "area" ? `Área · ${fmtArea(n.area || polyArea(n.pts))}` : "Ponto de nota";
+  const thumbs = (n.fotos || []).slice(0,3).map(f => `<img src="${f}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;margin:4px 4px 0 0">`).join("");
+  return `<div class="pop-code">${esc(n.titulo || "Nota")}</div><div class="pop-meta">${sub}${n.texto ? "<br>" + esc(n.texto.slice(0,160)) + (n.texto.length > 160 ? "…" : "") : ""}</div>${thumbs ? `<div>${thumbs}</div>` : ""}
+    <button class="pop-btn" style="margin-top:6px" data-nopen="${n.id}">Abrir nota</button>
+    <button class="pop-btn2" data-nmove="${n.id}">${n.kind === "area" ? "Editar pontos da área" : "Mover"}</button>
+    <button class="pop-del" style="margin-top:6px" data-ndel="${n.id}">Apagar</button>`;
+}
+function renderNotas(){
+  notesLayer.clearLayers();
+  if(settings.hideNotas) return;
+  NI().forEach(n => {
+    if(editMode && editMode.id === n.id) return;
+    let lay;
+    if(n.kind === "area"){
+      lay = L.polygon(n.pts, { color:NOTE_COLOR, weight:2.5, fillColor:NOTE_COLOR, fillOpacity:.18 });
+      if(n.titulo) lay.bindTooltip(esc(n.titulo), { permanent:true, direction:"center", className:"lbl" });
+    } else {
+      lay = L.marker(n.p, { icon:noteIcon, zIndexOffset:500 });
+      if(n.titulo) lay.bindTooltip(esc(n.titulo), { permanent:true, direction:"right", offset:[12,0], className:"lbl" });
+    }
+    lay.on("click", ev => {
+      L.DomEvent.stopPropagation(ev);
+      if(editMode || reloc) return;
+      if(drawing){ addVertex([ev.latlng.lat, ev.latlng.lng], ""); return; }
+      L.popup().setLatLng(n.kind === "area" ? ev.latlng : n.p).setContent(notaPopup(n)).openOn(map);
+    });
+    lay.addTo(notesLayer);
+  });
+}
+map.on("popupopen", e => {
+  const el = e.popup.getElement(); if(!el) return;
+  const o = el.querySelector("[data-nopen]"); if(o) o.onclick = () => { map.closePopup(); openNota(notas.find(x => x.id === o.dataset.nopen)); };
+  const m = el.querySelector("[data-nmove]"); if(m) m.onclick = () => { const n = notas.find(x => x.id === m.dataset.nmove); if(!n) return; n.kind === "area" ? startEditVerts("area", n) : startMovePoint("nota", n, `Mover ${n.titulo || "nota"}`); };
+  const d = el.querySelector("[data-ndel]"); if(d) d.onclick = async () => {
+    const n = notas.find(x => x.id === d.dataset.ndel); if(!n || !confirm(`Apagar a nota "${n.titulo || "sem título"}"${n.fotos?.length ? ` e as ${n.fotos.length} fotos` : ""}?`)) return;
+    notas = notas.filter(x => x !== n); await saveNotas(); map.closePopup(); renderNotas(); toast("Nota apagada.");
+  };
+});
+function openNota(n){
+  notaEdit = n.id ? JSON.parse(JSON.stringify(n)) : Object.assign({ id:uid(), titulo:"", texto:"", fotos:[] }, n);
+  const isNew = !notas.some(x => x.id === notaEdit.id);
+  $("#notaHead").textContent = isNew ? (notaEdit.kind === "area" ? "Nova área" : "Nova nota") : (notaEdit.kind === "area" ? "Área" : "Nota");
+  $("#notaSub").textContent = notaEdit.kind === "area" ? `${notaEdit.pts.length} pontos · ${fmtArea(polyArea(notaEdit.pts))}` : (() => { const c = toPTTM06(notaEdit.p[0], notaEdit.p[1]); return `PT-TM06 X ${c.x.toFixed(1)} · Y ${c.y.toFixed(1)}`; })();
+  $("#n-titulo").value = notaEdit.titulo || ""; $("#n-texto").value = notaEdit.texto || "";
+  $("#notaDel").hidden = isNew; renderNotaFotos();
+  $("#notasMenu").hidden = true; $("#notaSheet").hidden = false; $("#btnMarkHere").hidden = true;
+  if(isNew) setTimeout(() => $("#n-titulo").focus(), 50);
+}
+function closeNota(){ notaEdit = null; $("#notaSheet").hidden = true; $("#btnMarkHere").hidden = false; }
+function renderNotaFotos(){
+  $("#notaFotos").innerHTML = notaEdit.fotos.map((src,i) => `<div class="ph"><img src="${src}" alt="Foto ${i+1}"><button type="button" data-i="${i}" aria-label="Remover foto ${i+1}">×</button></div>`).join("");
+  $("#notaFotos").querySelectorAll("button").forEach(b => b.onclick = () => { notaEdit.fotos.splice(+b.dataset.i,1); renderNotaFotos(); });
+}
+async function addNotaFotos(files){ for(const f of files){ try { notaEdit.fotos.push(await compress(f)); } catch { toast("Uma das imagens não pôde ser lida."); } } renderNotaFotos(); }
+$("#nCam").onchange = e => { addNotaFotos([...e.target.files]); e.target.value = ""; };
+$("#nGal").onchange = e => { addNotaFotos([...e.target.files]); e.target.value = ""; };
+$("#notaCancel").onclick = closeNota;
+$("#notaSave").onclick = async () => {
+  const now = new Date().toISOString();
+  Object.assign(notaEdit, { titulo:$("#n-titulo").value.trim(), texto:$("#n-texto").value.trim(), atualizado:now });
+  if(!notaEdit.titulo && !notaEdit.texto && !notaEdit.fotos.length){ toast("Escreve um título, um texto ou junta uma foto."); return; }
+  if(notaEdit.kind === "area") notaEdit.area = Math.round(polyArea(notaEdit.pts));
+  notaEdit.criado = notaEdit.criado || now; notaEdit.projeto = notaEdit.projeto || settings.projeto; notaEdit.tecnico = notaEdit.tecnico || settings.tecnico;
+  const i = notas.findIndex(x => x.id === notaEdit.id); if(i >= 0) notas[i] = notaEdit; else notas.push(notaEdit);
+  await saveNotas(); const t = notaEdit.titulo; closeNota(); renderNotas(); toast(`Nota${t ? " " + t : ""} guardada.`);
+};
+$("#notaDel").onclick = async () => {
+  if(!confirm("Apagar esta nota?")) return;
+  notas = notas.filter(x => x.id !== notaEdit.id); await saveNotas(); closeNota(); renderNotas(); toast("Nota apagada.");
+};
+function renderNotasMenu(){
+  const n = NI(), np = n.filter(x => x.kind !== "area").length, na = n.length - np;
+  $("#notasCount").textContent = `${np} pontos de nota · ${na} áreas neste projeto`;
+  $("#notasToggle").textContent = settings.hideNotas ? "Mostrar notas no mapa" : "Esconder notas do mapa";
+}
+$("#btnNotas").onclick = () => { if(drawing) endDraw(); if(editMode) endEdit(); hideSheet(); $("#dwgSheet").hidden = true; map.closePopup(); renderNotasMenu(); $("#notasMenu").hidden = false; $("#btnMarkHere").hidden = true; };
+$("#notasClose").onclick = () => { $("#notasMenu").hidden = true; $("#btnMarkHere").hidden = false; };
+$("#notaPonto").onclick = () => { $("#notasMenu").hidden = true; notaPick = true; $("#relocText").textContent = "Toca no mapa onde queres a nota"; $("#relocBanner").hidden = false; };
+$("#notaAqui").onclick = async () => {
+  $("#notasMenu").hidden = true; if(!startGps()) { $("#btnMarkHere").hidden = false; return; }
+  toast("A obter posição…"); const f = await waitFix(); openNota({ kind:"ponto", p:[+f.lat.toFixed(7), +f.lon.toFixed(7)] });
+};
+$("#notaArea").onclick = () => startDraw("area");
+$("#notasToggle").onclick = async () => { settings.hideNotas = !settings.hideNotas; await saveSettings(); renderNotas(); renderNotasMenu(); };
 
 /* GPS no mapa */
 let gpsWatch = null, gpsFix = null, gpsDot = null, gpsCircle = null, follow = false, firstFix = true;
@@ -1283,7 +1430,7 @@ function startReloc(){
 function applyReloc(lat, lon){ editing.lat=lat; editing.lon=lon; editing.acc=null; endReloc(); }
 function endReloc(){ reloc=false; $("#relocBanner").hidden = true; $("#btnMarkHere").hidden = false; if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; } renderGps(); showForm(); }
 function cancelReloc(){ if(reloc){ reloc=false; $("#relocBanner").hidden=true; $("#btnMarkHere").hidden=false; if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; } } }
-$("#relocCancel").onclick = endReloc;
+$("#relocCancel").onclick = () => { if(notaPick){ notaPick = false; $("#relocBanner").hidden = true; $("#btnMarkHere").hidden = false; return; } endReloc(); };
 
 /* Guardar zona para sem rede */
 function tileList(bounds, zmin, zmax){
@@ -1623,15 +1770,16 @@ function allProjects(){
   const set = new Set(settings.projetos || []);
   records.forEach(r => r.projeto && set.add(r.projeto));
   tracados.forEach(t => t.projeto && set.add(t.projeto));
+  notas.forEach(n => n.projeto && set.add(n.projeto));
   if(settings.projeto) set.add(settings.projeto);
   return [...set].sort((a,b) => a.localeCompare(b, "pt"));
 }
-function refreshAll(){ renderHeader(); renderMarkers(); renderTracados(); renderProjList(); if(currentView === "lista") renderList(); }
+function refreshAll(){ renderHeader(); renderMarkers(); renderTracados(); renderNotas(); renderProjList(); if(currentView === "lista") renderList(); }
 function renderProjList(){
   const ps = allProjects();
   $("#projList").innerHTML = ps.map(p => {
-    const nr = records.filter(r => (r.projeto||"") === p).length, nt = tracados.filter(t => (t.projeto||"") === p).length;
-    return `<button class="projrow" data-p="${esc(p)}" aria-pressed="${p === settings.projeto}"><span class="pn">${esc(p)}</span><span class="pc">${nr} registos · ${nt} traçados</span></button>`;
+    const nr = records.filter(r => (r.projeto||"") === p).length, nt = tracados.filter(t => (t.projeto||"") === p).length, nn = notas.filter(x => (x.projeto||"") === p).length;
+    return `<button class="projrow" data-p="${esc(p)}" aria-pressed="${p === settings.projeto}"><span class="pn">${esc(p)}</span><span class="pc">${nr} registos · ${nt} traçados · ${nn} notas</span></button>`;
   }).join("");
   $("#projList").querySelectorAll(".projrow").forEach(b => b.onclick = async () => { settings.projeto = b.dataset.p; await saveSettings(); refreshAll(); toast(`Projeto ativo: ${settings.projeto}`); });
   $("#optAll").checked = !!settings.verTodos;
@@ -1650,15 +1798,17 @@ $("#btnRenProj").onclick = async () => {
   if(allProjects().includes(n)){ toast("Já existe um projeto com esse nome."); return; }
   for(const r of records.filter(r => (r.projeto||"") === old)){ r.projeto = n; await DB.put(r); }
   tracados.filter(t => (t.projeto||"") === old).forEach(t => t.projeto = n); await saveTracados();
+  notas.filter(x => (x.projeto||"") === old).forEach(x => x.projeto = n); await saveNotas();
   settings.projetos = (settings.projetos || []).map(p => p === old ? n : p); settings.projeto = n; await saveSettings(); refreshAll();
   toast(`Projeto renomeado para ${n}.`);
 };
 $("#btnDelProj").onclick = async () => {
   const p = settings.projeto, rs = records.filter(r => (r.projeto||"") === p), ts = tracados.filter(t => (t.projeto||"") === p);
-  if(!confirm(`Apagar o projeto "${p}" com ${rs.length} registos e ${ts.length} traçados? Esta ação não se desfaz.`)) return;
+  if(!confirm(`Apagar o projeto "${p}" com ${rs.length} registos, ${ts.length} traçados e ${notas.filter(x => (x.projeto||"") === p).length} notas? Esta ação não se desfaz.`)) return;
   if((rs.length || ts.length) && prompt("Escreve APAGAR para confirmar.") !== "APAGAR"){ toast("Nada foi apagado."); return; }
   for(const r of rs) await DB.del(r.id);
   records = records.filter(r => (r.projeto||"") !== p); tracados = tracados.filter(t => (t.projeto||"") !== p); await saveTracados();
+  notas = notas.filter(x => (x.projeto||"") !== p); await saveNotas();
   settings.projetos = (settings.projetos || []).filter(x => x !== p);
   const rest = allProjects().filter(x => x !== p);
   settings.projeto = rest[0] || "Projeto 1"; if(!rest.length) settings.projetos = ["Projeto 1"];
@@ -1676,7 +1826,7 @@ $("#btnWipe").onclick = async () => {
   if(!records.length && !tracados.length){ toast("Não há registos para apagar."); return; }
   if(!confirm(`Apagar os ${records.length} registos, ${tracados.length} traçados e todas as fotos deste dispositivo?`)) return;
   if(prompt("Escreve APAGAR para confirmar.") !== "APAGAR"){ toast("Nada foi apagado."); return; }
-  await DB.clear(); records = []; tracados = []; await saveTracados(); renderMarkers(); renderTracados(); renderList(); toast("Registos e traçados apagados.");
+  await DB.clear(); records = []; tracados = []; notas = []; await saveTracados(); await saveNotas(); renderMarkers(); renderTracados(); renderNotas(); renderList(); toast("Registos, traçados e notas apagados.");
 };
 
 /* =========================================================
@@ -1688,8 +1838,9 @@ function renderExport(){
   const tl = TR().reduce((s,t)=>s+t.comprimento,0);
   $("#expCounts").innerHTML = `<span><strong>${PR().length}</strong>&nbsp;registos</span><span><strong>${nf}</strong>&nbsp;fotos</span>` +
     (TR().length ? `<span><strong>${TR().length}</strong>&nbsp;traçados (${fmtLen(tl)})</span>` : "") +
+    (NI().length ? `<span><strong>${NI().length}</strong>&nbsp;notas</span>` : "") +
     Object.entries(TYPES).filter(([k])=>c[k]).map(([k,T])=>`<span><span class="dot" style="background:${T.hex}"></span>${esc(T.label)}: ${c[k]}</span>`).join("");
-  ["#btnZip","#btnKmz","#btnBackup"].forEach(s => $(s).disabled = !PR().length && !TR().length); $("#btnCsv").disabled = !PR().length;
+  ["#btnZip","#btnKmz","#btnBackup"].forEach(s => $(s).disabled = !PR().length && !TR().length && !NI().length); $("#btnCsv").disabled = !PR().length;
 }
 // Fotos arrumadas por tipo (fotos/poste/E-001_1.jpg); códigos repetidos no mesmo tipo levam um sufixo para não se sobreporem
 const photoNames = r => {
@@ -1724,7 +1875,22 @@ function buildGeoJSON(){
   const pts = sorted().filter(r=>r.lat!=null).map(r => ({ type:"Feature", geometry:{type:"Point", coordinates:[+r.lon.toFixed(7), +r.lat.toFixed(7)]}, properties:props(r) }));
   const lines = TR().map(t => ({ type:"Feature", geometry:{ type:"LineString", coordinates:t.pts.map(p => [p[1], p[0]]) },
     properties:{ nome:t.nome, tipo:"Traçado " + TRACE_TYPES[t.tipo].label, comprimento_m:t.comprimento, nos:(t.nos||[]).filter(Boolean).join(" > "), projeto:t.projeto||"", tecnico:t.tecnico||"", atualizado:t.atualizado } }));
-  return JSON.stringify({ type:"FeatureCollection", name:settings.projeto||"levantamento", features: pts.concat(lines) }, null, 1);
+  const nts = NI().map(n => ({ type:"Feature", geometry: n.kind === "area" ? { type:"Polygon", coordinates:[n.pts.concat([n.pts[0]]).map(p => [p[1], p[0]])] } : { type:"Point", coordinates:[n.p[1], n.p[0]] },
+    properties:{ tipo: n.kind === "area" ? "Nota (área)" : "Nota", titulo:n.titulo || "", informacao:n.texto || "", area_m2: n.kind === "area" ? Math.round(n.area || polyArea(n.pts)) : null, fotos:notaPhotoNames(n), projeto:n.projeto || "", atualizado:n.atualizado } }));
+  return JSON.stringify({ type:"FeatureCollection", name:settings.projeto||"levantamento", features: pts.concat(lines, nts) }, null, 1);
+}
+const notaPhotoNames = n => (n.fotos || []).map((_,i) => `fotos/notas/${safeName(n.titulo || "nota")}_${n.id.slice(-4)}_${i+1}.jpg`);
+function buildNotasCSV(){
+  const q = v => { const s = String(v ?? ""); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const lines = [["Titulo","Tipo","Informacao","Area_m2","X_PTTM06","Y_PTTM06","Vertices_PTTM06","N_fotos","Fotos","Projeto","Tecnico","Atualizado"].join(";")];
+  NI().forEach(n => {
+    const c = n.kind === "area" ? null : toPTTM06(n.p[0], n.p[1]);
+    lines.push([n.titulo, n.kind === "area" ? "Área" : "Ponto", n.texto, n.kind === "area" ? Math.round(n.area || polyArea(n.pts)) : "",
+      c ? c.x.toFixed(2).replace(".", ",") : "", c ? c.y.toFixed(2).replace(".", ",") : "",
+      n.kind === "area" ? n.pts.map(p => { const v = toPTTM06(p[0], p[1]); return `${v.x.toFixed(2)} ${v.y.toFixed(2)}`; }).join(" | ") : "",
+      (n.fotos||[]).length, notaPhotoNames(n).join(" | "), n.projeto, n.tecnico, fmtDate(n.atualizado)].map(q).join(";"));
+  });
+  return "\uFEFF" + lines.join("\r\n");
 }
 function buildTracadosCSV(){
   const q = v => { const s = String(v ?? ""); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
@@ -1756,12 +1922,12 @@ function buildKML(withPhotos){
     const rs = sorted().filter(r => r.tipo===t && r.lat!=null); if(!rs.length) return;
     k += `<Folder><name>${esc(T.label)} (${rs.length})</name>\n`;
     rs.forEach(r => {
-      k += `<Placemark><name>${esc(r.codigo)}</name><styleUrl>#s_${t}</styleUrl>${r.tipo==="poste" && OWNER_COLORS[r.campos?.proprietario] ? `<Style><IconStyle><color>${kc(recColor(r))}</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>` : ""}<description>${kmlDesc(r, withPhotos)}</description><Point><coordinates>${r.lon.toFixed(7)},${r.lat.toFixed(7)},0</coordinates></Point></Placemark>\n`;
+      k += `<Placemark><name>${esc(r.codigo)}</name><styleUrl>#s_${t}</styleUrl>${r.tipo==="poste" && OWNER_COLORS[ownerOf(r)] ? `<Style><IconStyle><color>${kc(recColor(r))}</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>` : ""}<description>${kmlDesc(r, withPhotos)}</description><Point><coordinates>${r.lon.toFixed(7)},${r.lat.toFixed(7)},0</coordinates></Point></Placemark>\n`;
     });
     k += `</Folder>\n`;
   });
   if(TR().length){
-    k += Object.entries(TRACE_TYPES).map(([tk,T]) => `<Style id="tr_${tk}"><LineStyle><color>${kc(T.hex)}</color><width>4</width></LineStyle></Style>`).join("\n") + "\n";
+    k += Object.entries(TRACE_TYPES).map(([tk,T]) => `<Style id="tr_${tk}"><LineStyle><color>${kc(T.kml)}</color><width>${T.dash ? 3 : 4}</width></LineStyle></Style>`).join("\n") + "\n";
     k += `<Folder><name>Traçados (${TR().length})</name>\n`;
     Object.entries(TRACE_TYPES).forEach(([tk,T]) => {
       const ts = TR().filter(t => t.tipo===tk); if(!ts.length) return;
@@ -1775,26 +1941,47 @@ function buildKML(withPhotos){
     });
     k += `</Folder>\n`;
   }
+  const ns = NI();
+  if(ns.length){
+    k += `<Style id="nota_p"><IconStyle><color>ff00b4f0</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/info-i.png</href></Icon></IconStyle><BalloonStyle><text>$[description]</text></BalloonStyle></Style>\n<Style id="nota_a"><LineStyle><color>ff00b4f0</color><width>2</width></LineStyle><PolyStyle><color>4000b4f0</color></PolyStyle><BalloonStyle><text>$[description]</text></BalloonStyle></Style>\n`;
+    k += `<Folder><name>Notas (${ns.length})</name>\n`;
+    ns.forEach(n => {
+      let h = `<table style="font-family:Arial,sans-serif;font-size:13px">${n.kind === "area" ? `<tr><td style="color:#5B6870;padding-right:10px">Área</td><td><b>${fmtArea(n.area || polyArea(n.pts))}</b></td></tr>` : ""}<tr><td style="color:#5B6870;padding-right:10px">Atualizado</td><td><b>${esc(fmtDate(n.atualizado))}</b></td></tr></table>${n.texto ? `<p style="font-family:Arial;font-size:13px">${esc(n.texto).replace(/\n/g, "<br>")}</p>` : ""}`;
+      if(withPhotos) h += notaPhotoNames(n).map(f => `<br><img src="${f}" width="380">`).join("");
+      const d = `<![CDATA[${h.replace(/]]>/g, "]] >")}]]>`;
+      k += n.kind === "area"
+        ? `<Placemark><name>${esc(n.titulo || "Área")}</name><styleUrl>#nota_a</styleUrl><description>${d}</description><Polygon><outerBoundaryIs><LinearRing><coordinates>${n.pts.concat([n.pts[0]]).map(p => `${p[1]},${p[0]},0`).join(" ")}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>\n`
+        : `<Placemark><name>${esc(n.titulo || "Nota")}</name><styleUrl>#nota_p</styleUrl><description>${d}</description><Point><coordinates>${n.p[1]},${n.p[0]},0</coordinates></Point></Placemark>\n`;
+    });
+    k += `</Folder>\n`;
+  }
   return k + `</Document></kml>\n`;
 }
 async function buildKMZ(){
   const z = new JSZip();
   z.file("doc.kml", buildKML(true));
   sorted().filter(r => r.lat!=null).forEach(r => photoNames(r).forEach((n,i) => z.file(n, dataURLtoBytes(r.fotos[i]))));
+  NI().forEach(n => notaPhotoNames(n).forEach((f,i) => z.file(f, dataURLtoBytes(n.fotos[i]))));
   return z.generateAsync({ type:"uint8array", compression:"DEFLATE", compressionOptions:{ level:3 } });
 }
 function buildDXF(){
   const L = [], put = (c,v) => L.push(String(c), String(v));
   const layers = Object.entries(TYPES).map(([t,T]) => ({ name:"LEV_"+ascii(T.prefix), color:T.dxf, t }));
-  Object.entries(TRACE_TYPES).forEach(([k,T]) => layers.push({ name:"TRACADO_"+ascii(T.label).toUpperCase(), color:T.dxf, t:"tr_"+k }));
+  Object.entries(TRACE_TYPES).forEach(([k,T]) => layers.push({ name:"TRACADO_"+ascii(T.label).toUpperCase().replace(/\s+/g,"_"), color:T.dxf, t:"tr_"+k, lt: T.dash ? "DASHED" : "CONTINUOUS" }));
+  layers.push({ name:"NOTAS", color:2, t:"notas" });
   put(0,"SECTION"); put(2,"HEADER"); put(9,"$ACADVER"); put(1,"AC1009"); put(0,"ENDSEC");
-  put(0,"SECTION"); put(2,"TABLES"); put(0,"TABLE"); put(2,"LAYER"); put(70, layers.length);
-  layers.forEach(l => { put(0,"LAYER"); put(2,l.name); put(70,0); put(62,l.color); put(6,"CONTINUOUS"); });
+  put(0,"SECTION"); put(2,"TABLES");
+  put(0,"TABLE"); put(2,"LTYPE"); put(70,2);
+  put(0,"LTYPE"); put(2,"CONTINUOUS"); put(70,0); put(3,"Solid line"); put(72,65); put(73,0); put(40,"0.0");
+  put(0,"LTYPE"); put(2,"DASHED"); put(70,0); put(3,"__ __ __"); put(72,65); put(73,2); put(40,"1.5"); put(49,"1.0"); put(49,"-0.5");
+  put(0,"ENDTAB");
+  put(0,"TABLE"); put(2,"LAYER"); put(70, layers.length);
+  layers.forEach(l => { put(0,"LAYER"); put(2,l.name); put(70,0); put(62,l.color); put(6,l.lt || "CONTINUOUS"); });
   put(0,"ENDTAB"); put(0,"ENDSEC");
   put(0,"SECTION"); put(2,"ENTITIES");
   sorted().filter(r => r.lat!=null).forEach(r => {
     const p = toPTTM06(r.lat, r.lon), lay = layers.find(l => l.t===r.tipo)?.name || "LEV_OT", X = p.x.toFixed(3), Y = p.y.toFixed(3);
-    const oc = r.tipo==="poste" ? OWNER_DXF[r.campos?.proprietario] : null;
+    const oc = r.tipo==="poste" ? OWNER_DXF[ownerOf(r)] : null;
     const col = () => { if(oc) put(62, oc); };
     put(0,"POINT"); put(8,lay); col(); put(10,X); put(20,Y); put(30,"0.0");
     put(0,"CIRCLE"); put(8,lay); col(); put(10,X); put(20,Y); put(30,"0.0"); put(40,"0.5");
@@ -1805,6 +1992,21 @@ function buildDXF(){
     put(0,"POLYLINE"); put(8,lay); put(66,1); put(10,"0.0"); put(20,"0.0"); put(30,"0.0"); put(70,0);
     t.pts.forEach(p => { const c = toPTTM06(p[0], p[1]); put(0,"VERTEX"); put(8,lay); put(10,c.x.toFixed(3)); put(20,c.y.toFixed(3)); put(30,"0.0"); });
     put(0,"SEQEND"); put(8,lay);
+  });
+  NI().forEach(n => {
+    const txt = ascii(n.titulo || "Nota");
+    if(n.kind === "area"){
+      put(0,"POLYLINE"); put(8,"NOTAS"); put(66,1); put(10,"0.0"); put(20,"0.0"); put(30,"0.0"); put(70,1);
+      const q = n.pts.map(p => toPTTM06(p[0], p[1]));
+      q.forEach(c => { put(0,"VERTEX"); put(8,"NOTAS"); put(10,c.x.toFixed(3)); put(20,c.y.toFixed(3)); put(30,"0.0"); });
+      put(0,"SEQEND"); put(8,"NOTAS");
+      const cx = q.reduce((a,c) => a + c.x, 0)/q.length, cy = q.reduce((a,c) => a + c.y, 0)/q.length;
+      put(0,"TEXT"); put(8,"NOTAS"); put(10,cx.toFixed(3)); put(20,cy.toFixed(3)); put(30,"0.0"); put(40,"1.2"); put(1, txt);
+    } else {
+      const c = toPTTM06(n.p[0], n.p[1]);
+      put(0,"POINT"); put(8,"NOTAS"); put(10,c.x.toFixed(3)); put(20,c.y.toFixed(3)); put(30,"0.0");
+      put(0,"TEXT"); put(8,"NOTAS"); put(10,(c.x+0.8).toFixed(3)); put(20,(c.y+0.8).toFixed(3)); put(30,"0.0"); put(40,"1.0"); put(1, txt);
+    }
   });
   put(0,"ENDSEC"); put(0,"EOF");
   return L.join("\r\n") + "\r\n";
@@ -1838,12 +2040,13 @@ $("#btnZip").onclick = async () => {
     const z = new JSZip(), n = baseName();
     z.file(n+".csv", buildCSV()); z.file(n+".geojson", buildGeoJSON()); z.file(n+".kml", buildKML(false)); z.file(n+".kmz", await buildKMZ()); z.file(n+"_PTTM06.dxf", buildDXF());
     if(TR().length) z.file(n+"_tracados.csv", buildTracadosCSV());
+    if(NI().length){ z.file(n+"_notas.csv", buildNotasCSV()); NI().forEach(nt => notaPhotoNames(nt).forEach((f,i) => z.file(f, dataURLtoBytes(nt.fotos[i])))); }
     sorted().forEach(r => photoNames(r).forEach((p,i) => z.file(p, dataURLtoBytes(r.fotos[i]))));
     const blob = await z.generateAsync({ type:"blob", compression:"STORE", mimeType:"application/zip" });
     await saveFile(n+".zip", blob);
   } finally { b.disabled = false; b.textContent = "Exportar pacote completo (.zip)"; }
 };
-$("#btnBackup").onclick = () => saveFile(`copia_${baseName()}.json`, new Blob([JSON.stringify({ app:"levantamento-infra", versao:1, exportado:new Date().toISOString(), settings:{projeto:settings.projeto,tecnico:settings.tecnico}, records, tracados })], {type:"application/json"}));
+$("#btnBackup").onclick = () => saveFile(`copia_${baseName()}.json`, new Blob([JSON.stringify({ app:"levantamento-infra", versao:1, exportado:new Date().toISOString(), settings:{projeto:settings.projeto,tecnico:settings.tecnico}, records, tracados, notas })], {type:"application/json"}));
 $("#inImport").onchange = async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f) return;
   try {
@@ -1863,6 +2066,13 @@ $("#inImport").onchange = async e => {
       if(!cur){ tracados.push(t); ntr++; } else if((t.atualizado||"") > (cur.atualizado||"")){ tracados[tracados.indexOf(cur)] = t; ntr++; }
     }
     if(ntr) await saveTracados();
+    let nno = 0;
+    for(const n of (Array.isArray(j.notas) ? j.notas : [])){
+      if(!n?.id || !(n.p || n.pts)) continue;
+      const cur = notas.find(x => x.id === n.id);
+      if(!cur){ notas.push(n); nno++; } else if((n.atualizado||"") > (cur.atualizado||"")){ notas[notas.indexOf(cur)] = n; nno++; }
+    }
+    if(nno){ await saveNotas(); renderNotas(); }
     renderMarkers(); renderTracados(); renderExport(); toast(`Importação concluída: ${novos} novos, ${atual} atualizados` + (ntr ? `, ${ntr} traçados.` : "."));
   } catch { toast("Este ficheiro não é uma cópia desta aplicação."); }
 };
@@ -1875,6 +2085,7 @@ $("#inImport").onchange = async e => {
   catch { toast("Este navegador não permite guardar dados localmente."); }
   try { overlays = (await DB.getKV("overlays")) || []; } catch { overlays = []; }
   try { tracados = (await DB.getKV("tracados")) || []; } catch { tracados = []; }
+  try { notas = (await DB.getKV("notas")) || []; } catch { notas = []; }
   // Migração: garante um projeto ativo e põe registos sem projeto no projeto ativo
   if(!settings.projeto) settings.projeto = "Projeto 1";
   settings.projetos = [...new Set([...(settings.projetos || []), settings.projeto])];
@@ -1887,7 +2098,7 @@ $("#inImport").onchange = async e => {
   if(settings.view) map.setView([settings.view[0], settings.view[1]], settings.view[2]);
   else if(PR().some(r => r.lat!=null)) map.fitBounds(PR().filter(r=>r.lat!=null).map(r=>[r.lat,r.lon]), { maxZoom:18, padding:[40,40] });
   firstFix = true;
-  renderHeader(); renderMarkers(); renderTracados();
+  renderHeader(); renderMarkers(); renderTracados(); renderNotas();
   try { if(navigator.storage?.persist){ const p = await navigator.storage.persist(); $("#persistInfo").textContent = p ? "O navegador confirmou que mantém os dados guardados." : "O navegador pode limpar dados se faltar espaço: exporta no fim de cada dia."; } } catch {}
   startGps();
 })();

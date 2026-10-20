@@ -479,7 +479,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v8";
+const APP_VERSION = "v9";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -671,7 +671,7 @@ function renderMarkers(){
     const m = L.circleMarker([r.lat, r.lon], { radius:9, color:"#fff", weight:2.5, fillColor:recColor(r), fillOpacity:1 });
     m.bindTooltip(esc(r.codigo), { permanent:true, direction:"right", offset:[8,0], className:"lbl" });
     const sub = r.tipo==="edificio" ? [r.campos?.rua, r.campos?.numero].filter(Boolean).join(" ") : (r.campos?.ref || r.campos?.tipo || "");
-    const html = `<div class="pop-code">${esc(r.codigo)}</div><div class="pop-meta">${esc(T.label)}${sub?" · "+esc(sub):""}</div><button class="pop-btn" data-open="${r.id}">Abrir registo</button>`;
+    const html = `<div class="pop-code">${esc(r.codigo)}</div><div class="pop-meta">${esc(T.label)}${sub?" · "+esc(sub):""}</div><button class="pop-btn" data-open="${r.id}">Abrir registo</button><button class="pop-del" style="margin-top:6px" data-recdel="${r.id}">Apagar</button>`;
     m.on("click", ev => {
       L.DomEvent.stopPropagation(ev);
       if(drawing){ addVertex([r.lat, r.lon], r.codigo); return; }
@@ -918,6 +918,15 @@ function bindTrPopup(popup){
   };
 }
 map.on("popupopen", e => bindTrPopup(e.popup));
+map.on("popupopen", e => {
+  const b = e.popup.getElement()?.querySelector("[data-recdel]"); if(!b) return;
+  b.onclick = async () => {
+    const r = records.find(x => x.id===b.dataset.recdel); if(!r) return;
+    if(!confirm(`Apagar ${r.codigo}${r.fotos?.length ? ` e as ${r.fotos.length} fotos` : ""}? Esta ação não se desfaz.`)) return;
+    try { await DB.del(r.id); } catch { toast("Não foi possível apagar."); return; }
+    records = records.filter(x => x.id!==r.id); map.closePopup(); renderMarkers(); toast(`${r.codigo} apagado.`);
+  };
+});
 
 /* GPS no mapa */
 let gpsWatch = null, gpsFix = null, gpsDot = null, gpsCircle = null, follow = false, firstFix = true;

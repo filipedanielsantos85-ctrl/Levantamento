@@ -78,16 +78,7 @@ main{max-width:720px;margin:0 auto;padding:16px}
 #gpsChip{position:absolute;z-index:500;left:12px;top:12px;background:rgba(22,35,44,.88);color:#fff;font-size:14px;font-weight:500;padding:6px 10px;border-radius:8px}
 .cross{position:absolute;left:50%;top:50%;width:0;height:0;z-index:450;pointer-events:none}
 
-.sheet{position:absolute;left:12px;right:12px;bottom:12px;max-width:520px;margin:0 auto;z-index:600;background:var(--surface);border-radius:16px;padding:16px;box-shadow:0 6px 28px rgba(0,0,0,.35)}
-.sheet .hint{font-size:14px;font-weight:600;color:var(--ink);background:var(--bg);border-radius:8px;padding:6px 10px;margin:0 0 12px}
-.pin{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#F0B400;border:3px solid #16232C;box-shadow:0 2px 6px rgba(0,0,0,.45)}
-.pin::after{content:"";position:absolute;left:7px;top:7px;width:8px;height:8px;border-radius:50%;background:#16232C}
-#v-form.modal{display:block;position:fixed;left:0;right:0;top:calc(var(--hdr) + env(safe-area-inset-top,0px));bottom:calc(var(--nav) + env(safe-area-inset-bottom,0px));z-index:1100;background:rgba(10,16,20,.4);overflow:auto;padding:12px;-webkit-overflow-scrolling:touch}
-#v-form.modal #form{background:var(--bg);border-radius:16px;padding:16px;max-width:560px;margin:0 auto;box-shadow:0 6px 28px rgba(0,0,0,.35)}
-#v-form.modal .form-head{display:flex}
-.form-head{display:none;align-items:center;justify-content:space-between;margin:-4px 0 12px}
-.form-head h2{margin:0;font-size:24px}
-.form-head button{border:0;background:var(--surface);border-radius:50%;width:40px;height:40px;font-size:22px;line-height:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:600;background:var(--surface);border-radius:16px 16px 0 0;padding:16px;box-shadow:0 -4px 20px rgba(0,0,0,.25)}
 .sheet h2{margin:0;font-size:22px}
 .sheet .coords{font-size:14px;color:var(--muted);margin:2px 0 12px}
 .sheet .types{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px}
@@ -200,9 +191,8 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   </div>
 
   <div class="sheet" id="sheet" hidden>
-    <h2>Que elemento é este?</h2>
+    <h2>Novo registo neste ponto</h2>
     <p class="coords" id="sheetCoords"></p>
-    <p class="hint">Arrasta o ponto amarelo para o acertar, ou toca noutro sítio do mapa.</p>
     <div class="types" id="sheetTypes"></div>
     <button class="btn block" id="sheetCancel">Cancelar</button>
   </div>
@@ -222,7 +212,6 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   <!-- FORMULÁRIO -->
   <section class="view" id="v-form" aria-label="Registo">
     <form id="form" novalidate>
-      <div class="form-head"><h2 id="formTitle">Novo registo</h2><button type="button" id="formX" aria-label="Fechar">×</button></div>
       <div class="typepick" id="typepick" role="group" aria-label="Tipo de elemento"></div>
       <fieldset>
         <legend>Identificação</legend>
@@ -562,11 +551,10 @@ addEventListener("online", renderNet); addEventListener("offline", renderNet); r
 /* ---------- Navegação ---------- */
 function show(view){
   currentView = view;
-  $("#v-form").classList.remove("modal");
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "v-"+view));
   document.querySelectorAll("nav.tabs button").forEach(b => { if(b.dataset.tab===view) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
   $("#fab").hidden = view !== "lista";
-  if(view==="mapa"){ setTimeout(() => map.invalidateSize(), 50); $("#btnMarkHere").hidden = !$("#sheet").hidden || !$("#dwgSheet").hidden; }
+  if(view==="mapa") setTimeout(() => map.invalidateSize(), 50);
   if(view==="lista") renderList();
   if(view==="export") renderExport();
   if(view==="proj"){ $("#s-proj").value = settings.projeto; $("#s-tec").value = settings.tecnico; $("#s-gkey").value = settings.gkey || ""; }
@@ -737,24 +725,14 @@ $("#inDxf").onchange = async e => {
 
 /* Ponto temporário e folha "novo registo" */
 let tempMarker = null, sheetPos = null;
-const pinIcon = L.divIcon({ className:"", html:'<div class="pin"></div>', iconSize:[28,28], iconAnchor:[14,33] });
 function showSheet(lat, lon, acc, snap){
   if(!$("#dwgSheet").hidden){ $("#dwgSheet").hidden = true; }
-  if(tempMarker) map.removeLayer(tempMarker);
-  tempMarker = L.marker([lat, lon], { icon:pinIcon, draggable:true, autoPan:true, zIndexOffset:1000 }).addTo(map);
-  tempMarker.on("dragend", () => {
-    const ll = tempMarker.getLatLng(), sn = nearestSnap(ll);
-    if(sn) tempMarker.setLatLng(sn.ll);
-    const q = tempMarker.getLatLng();
-    setSheetPos(q.lat, q.lng, null, sn);
-  });
-  setSheetPos(lat, lon, acc, snap);
-  $("#sheet").hidden = false; $("#btnMarkHere").hidden = true;
-}
-function setSheetPos(lat, lon, acc, snap){
   sheetPos = {lat, lon, acc: acc ?? null, attr: snap?.attr || ""};
+  if(tempMarker) map.removeLayer(tempMarker);
+  tempMarker = L.circleMarker([lat, lon], { radius:11, color:"#16232C", weight:3, fillColor:"#F0B400", fillOpacity:1 }).addTo(map);
   const p = toPTTM06(lat, lon);
-  $("#sheetCoords").textContent = `PT-TM06 X ${p.x.toFixed(1)} · Y ${p.y.toFixed(1)}` + (acc!=null ? ` · GPS ±${Math.round(acc)} m` : "") + (snap ? ` · ajustado a ${snap.lbl}` : "");
+  $("#sheetCoords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)} · PT-TM06 X ${p.x.toFixed(1)} Y ${p.y.toFixed(1)}` + (acc!=null ? ` · ±${Math.round(acc)} m` : "") + (snap ? ` · ajustado a ${snap.lbl}` : "");
+  $("#sheet").hidden = false; $("#btnMarkHere").hidden = true;
 }
 function hideSheet(){ $("#sheet").hidden = true; $("#btnMarkHere").hidden = false; if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; } sheetPos = null; }
 $("#sheetTypes").innerHTML = Object.entries(TYPES).map(([k,T]) => `<button class="typebtn" data-t="${k}"><span class="dot" style="background:${T.hex}"></span>${esc(T.label)}</button>`).join("");
@@ -764,9 +742,8 @@ $("#sheetCancel").onclick = hideSheet;
 map.on("click", e => {
   if(reloc){ const sn = nearestSnap(e.latlng); if(sn) applyReloc(sn.ll[0], sn.ll[1]); else applyReloc(e.latlng.lat, e.latlng.lng); return; }
   const sn = nearestSnap(e.latlng);
-  const ll = sn ? L.latLng(sn.ll[0], sn.ll[1]) : e.latlng;
-  if(!$("#sheet").hidden && tempMarker){ tempMarker.setLatLng(ll); setSheetPos(ll.lat, ll.lng, null, sn); return; }
-  showSheet(ll.lat, ll.lng, null, sn);
+  if(sn){ showSheet(sn.ll[0], sn.ll[1], null, sn); return; }
+  showSheet(e.latlng.lat, e.latlng.lng, null);
 });
 
 /* GPS no mapa */
@@ -824,7 +801,7 @@ function startReloc(){
   }
 }
 function applyReloc(lat, lon){ editing.lat=lat; editing.lon=lon; editing.acc=null; endReloc(); }
-function endReloc(){ reloc=false; $("#relocBanner").hidden = true; $("#btnMarkHere").hidden = false; if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; } renderGps(); showForm(); }
+function endReloc(){ reloc=false; $("#relocBanner").hidden = true; $("#btnMarkHere").hidden = false; if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; } renderGps(); show("form"); }
 function cancelReloc(){ if(reloc){ reloc=false; $("#relocBanner").hidden=true; $("#btnMarkHere").hidden=false; if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; } } }
 $("#relocCancel").onclick = endReloc;
 
@@ -897,42 +874,27 @@ $("#q").addEventListener("input", renderList);
 /* =========================================================
    FORMULÁRIO
    ========================================================= */
-/* Prefixo do código de postes e câmaras pelo proprietário: MEO/PTC → PT, E-Redes → E, Município → M, Outro → O.
-   A numeração é separada por tipo (o PT-001 poste e o PT-001 câmara são registos diferentes). */
-const OWNER_PREFIX = { "MEO/PTC":"PT", "E-Redes":"E", "Município":"M", "Outro":"O" };
-const OWNER_TYPES = ["poste","camara"];
-function codePrefix(tipo, campos){ return (OWNER_TYPES.includes(tipo) && OWNER_PREFIX[campos?.proprietario]) || TYPES[tipo].prefix; }
-function nextCode(tipo, campos){
-  const pre = codePrefix(tipo, campos) + "-"; let max = 0;
-  records.forEach(r => { if(r.tipo===tipo && r.codigo?.startsWith(pre)){ const n=parseInt(r.codigo.slice(pre.length),10); if(n>max) max=n; } });
+function nextCode(tipo){
+  const pre = TYPES[tipo].prefix + "-"; let max = 0;
+  records.forEach(r => { if(r.codigo?.startsWith(pre)){ const n=parseInt(r.codigo.slice(pre.length),10); if(n>max) max=n; } });
   return pre + String(max+1).padStart(3,"0");
 }
-function showForm(){
-  if(returnTo === "mapa"){
-    currentView = "form";
-    document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id==="v-mapa" || v.id==="v-form"));
-    $("#v-form").classList.add("modal"); $("#v-form").scrollTop = 0;
-    $("#btnMarkHere").hidden = true; $("#fab").hidden = true;
-  } else show("form");
-}
-function closeForm(){ editing = null; show(returnTo); $("#btnMarkHere").hidden = false; }
 function openForm(rec, pos, tipo){
   const isNew = !rec;
   editing = rec ? JSON.parse(JSON.stringify(rec)) : { id:uid(), tipo: tipo || "poste", codigo:"", campos:{}, fotos:[], lat:pos?.lat ?? null, lon:pos?.lon ?? null, acc:pos?.acc ?? null, obs:"" };
   editing._new = isNew; editing._autoCode = isNew;
-  if(isNew) editing.codigo = nextCode(editing.tipo, editing.campos);
+  if(isNew) editing.codigo = nextCode(editing.tipo);
   if(isNew && pos?.attr) editing.obs = "Desenho: " + pos.attr;
   $("#f-codigo").value = editing.codigo; $("#f-obs").value = editing.obs || "";
   renderTypePick(); renderDyn(); renderGps(); renderPhotos();
   $("#btnDelete").hidden = isNew;
-  $("#formTitle").textContent = isNew ? "Novo registo" : editing.codigo;
-  showForm();
+  show("form");
 }
 function renderTypePick(){
   $("#typepick").innerHTML = Object.entries(TYPES).map(([k,T]) => `<button type="button" class="typebtn" data-t="${k}" style="--tc:${T.hex}" aria-pressed="${editing.tipo===k}"><span class="dot" style="background:${T.hex}"></span>${esc(T.label)}</button>`).join("");
   $("#typepick").querySelectorAll("button").forEach(b => b.onclick = () => {
     collectDyn(); editing.tipo = b.dataset.t;
-    if(editing._autoCode){ editing.codigo = nextCode(editing.tipo, editing.campos); $("#f-codigo").value = editing.codigo; }
+    if(editing._autoCode){ editing.codigo = nextCode(editing.tipo); $("#f-codigo").value = editing.codigo; }
     renderTypePick(); renderDyn();
   });
 }
@@ -947,14 +909,6 @@ function renderDyn(){
     const on = b.getAttribute("aria-pressed") !== "true";
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed","false"));
     if(on) b.setAttribute("aria-pressed","true");
-    // Mudar o proprietário de um poste ou câmara novos atualiza o prefixo do código
-    if(b.parentElement.dataset.k==="proprietario" && editing._new && OWNER_TYPES.includes(editing.tipo)){
-      const cur = $("#f-codigo").value.trim().toUpperCase();
-      if(editing._autoCode || /^(PT|E|M|O|CV)-\d+$/.test(cur)){
-        collectDyn(); editing.codigo = nextCode(editing.tipo, editing.campos);
-        $("#f-codigo").value = editing.codigo; editing._autoCode = true;
-      }
-    }
   });
 }
 function collectDyn(){
@@ -1011,7 +965,7 @@ $("#inGal").onchange = e => { addPhotos([...e.target.files]); e.target.value="";
 $("#form").onsubmit = async e => {
   e.preventDefault(); collectForm();
   if(!editing.codigo){ toast("Dá um código ao elemento."); $("#f-codigo").focus(); return; }
-  if(records.find(r => r.codigo===editing.codigo && r.tipo===editing.tipo && r.id!==editing.id) && !confirm(`Já existe ${TYPES[editing.tipo].label.toLowerCase()} ${editing.codigo}. Guardar mesmo assim?`)) return;
+  if(records.find(r => r.codigo===editing.codigo && r.id!==editing.id) && !confirm(`Já existe um registo ${editing.codigo}. Guardar mesmo assim?`)) return;
   if(editing.lat==null && !confirm("Este registo não tem coordenadas. Guardar assim?")) return;
   const now = new Date().toISOString();
   const rec = Object.assign({}, editing, { atualizado:now, criado:editing.criado||now, projeto:editing.projeto||settings.projeto, tecnico:editing.tecnico||settings.tecnico });
@@ -1020,8 +974,7 @@ $("#form").onsubmit = async e => {
   const i = records.findIndex(r => r.id===rec.id); if(i>=0) records[i]=rec; else records.push(rec);
   editing = null; renderMarkers(); show(returnTo); toast(`${rec.codigo} guardado.`);
 };
-$("#btnCancel").onclick = closeForm;
-$("#formX").onclick = closeForm;
+$("#btnCancel").onclick = () => { editing = null; show(returnTo); };
 $("#btnDelete").onclick = async () => {
   if(!confirm(`Apagar ${editing.codigo}? Esta ação não se desfaz.`)) return;
   await DB.del(editing.id); records = records.filter(r => r.id!==editing.id);

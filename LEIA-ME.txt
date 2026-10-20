@@ -1,0 +1,39 @@
+LEVANTAMENTO DE INFRAESTRUTURAS — como pôr a app online (grátis)
+
+1. Cria conta em https://github.com (se ainda não tiveres).
+2. Botão "+" > "New repository". Nome: levantamento. Marca "Public". Create.
+3. "uploading an existing file": arrasta os 5 ficheiros desta pasta
+   (index.html, sw.js, manifest.webmanifest, icon-192.png, icon-512.png). Commit.
+4. Settings > Pages > Source: "Deploy from a branch", branch "main", pasta "/ (root)". Save.
+5. Ao fim de 1-2 minutos a app fica em:
+   https://O-TEU-UTILIZADOR.github.io/levantamento/
+
+No telemóvel/tablet:
+- Abre o endereço no Chrome (Android) ou Safari (iPhone/iPad).
+- Menu > "Adicionar ao ecrã principal". Fica com ícone, como uma app.
+- Autoriza a localização quando pedir.
+
+Sem rede:
+- Antes de sair, abre a zona de trabalho no mapa (com zoom nas ruas) e toca em "Guardar zona".
+  Faz isso para "Mapa" e para "Satélite" se quiseres os dois.
+- Os registos e fotos ficam no dispositivo. Exporta no fim de cada dia.
+
+Para atualizar a app: substitui o index.html no GitHub. Os registos no dispositivo não se perdem.
+
+MAPA GOOGLE (opcional)
+1. https://console.cloud.google.com > cria um projeto > ativa a faturação (pede cartão; há quota gratuita mensal).
+2. "APIs e serviços" > Biblioteca > ativa "Map Tiles API".
+3. "Credenciais" > Criar credenciais > Chave de API.
+4. Restringe a chave: Restrições de aplicações > Referenciadores HTTP >
+   https://O-TEU-UTILIZADOR.github.io/*   e   Restrições de API > Map Tiles API.
+5. Na app: Projeto > Mapa Google > cola a chave > Guardar e testar.
+6. No mapa, o botão do fundo passa por: Mapa OSM > Satélite Esri > Mapa Google > Satélite Google.
+Nota: o mapa Google só funciona com rede (a Google não permite guardá-lo para uso offline).
+
+DESENHOS DE REFERÊNCIA (DWG)
+1. No AutoCAD: Guardar como > DXF (formato ASCII, o normal). O desenho tem de estar em PT-TM06 / ETRS89.
+   Dica: apaga ou congela o que não precisas no terreno antes de exportar (fica mais leve).
+2. Na app, no mapa: botão "Desenho" > Carregar DXF.
+3. Podes ligar/desligar cada desenho e cada layer. O desenho fica guardado no dispositivo e funciona sem rede.
+4. Com "Ajustar ao desenho" ligado, ao tocar perto de um vértice, ponto ou bloco, o registo fica exatamente nesse sítio
+   e os atributos do bloco passam para as observações.

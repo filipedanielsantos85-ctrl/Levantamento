@@ -179,6 +179,8 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:1000;background:var(--su
 nav.tabs button{flex:1;border:0;background:none;height:var(--nav);font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:18px;color:var(--muted);border-top:3px solid transparent}
 nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
 .fab{position:fixed;right:16px;bottom:calc(var(--nav) + 18px + env(safe-area-inset-bottom,0px));z-index:900;height:60px;padding:0 22px;border-radius:30px;border:0;background:var(--accent);color:var(--accent-ink);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:21px;box-shadow:0 3px 0 #16232C}
+#updBar{position:fixed;left:12px;right:12px;top:calc(var(--hdr) + env(safe-area-inset-top,0px) + 8px);max-width:560px;margin:0 auto;z-index:1500;background:#16232C;color:#fff;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.35);font-weight:500}
+#updBar span{flex:1}#updBar button{border:0;background:#F0B400;color:#16232C;font-weight:700;border-radius:8px;padding:9px 14px}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#16232C;color:#fff;padding:12px 18px;border-radius:10px;font-weight:500;z-index:2000;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
 </style>
@@ -322,7 +324,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
       <p>A aplicação abre e grava registos sem rede. O mapa sem rede só mostra as zonas já vistas ou guardadas: antes de sair, abre a zona de trabalho no mapa e toca em "Guardar zona".</p>
       <p class="note" id="persistInfo"></p>
     </div>
-    <p class="note" style="text-align:center">Versão da app: <strong>2026-10-20 · v7</strong></p>
+    <p class="note" style="text-align:center">Versão da app: <strong id="verLbl"></strong></p>
     <div class="panel">
       <h2>Limpar dispositivo</h2>
       <p>Apaga todos os registos e fotos deste dispositivo. Exporta antes.</p>
@@ -340,6 +342,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   <button data-tab="proj">Projeto</button>
 </nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="updBar" hidden><span id="updTxt">Há uma versão nova da app.</span><button id="updBtn">Atualizar</button></div>
 
 <script>
 (() => {
@@ -476,6 +479,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
+const APP_VERSION = "v8";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -483,6 +487,7 @@ const TYPES = {
     {k:"ref", l:"Nº / placa do poste", t:"text"},
     {k:"material", l:"Material", t:"seg", o:["Betão","Madeira","Metálico","Fibra"]},
     {k:"altura", l:"Altura (m)", t:"num"},
+    {k:"esforco", l:"Esforço (daN)", t:"num"},
     {k:"estado", l:"Estado", t:"seg", o:["Bom","Razoável","Mau"]},
     {k:"cabos", l:"Nº de cabos existentes", t:"num"},
     {k:"espaco", l:"Espaço para nova ferragem", t:"seg", o:["Sim","Não","A verificar"]}
@@ -521,6 +526,10 @@ const TYPES = {
     {k:"descricao", l:"Descrição", t:"text"}
   ]}
 };
+/* Cor dos postes no mapa pelo proprietário: E-Redes vermelho, MEO/PTC azul, restantes castanho */
+const OWNER_COLORS = { "E-Redes":"#D7261E", "MEO/PTC":"#1F5FD1", "Município":"#8B5A2B", "Outro":"#8B5A2B" };
+const OWNER_DXF = { "E-Redes":1, "MEO/PTC":5, "Município":32, "Outro":32 };
+const recColor = r => (r.tipo==="poste" && OWNER_COLORS[r.campos?.proprietario]) || (TYPES[r.tipo] || TYPES.outro).hex;
 const ALL_KEYS = [];
 Object.values(TYPES).forEach(T => T.fields.forEach(f => { if(!ALL_KEYS.find(x=>x.k===f.k)) ALL_KEYS.push(f); }));
 
@@ -599,7 +608,7 @@ function show(view){
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { cancelReloc(); if(drawing) endDraw(); hideSheet(); $("#dwgSheet").hidden = true; show(b.dataset.tab); }));
 $("#fab").onclick = () => { returnTo = "lista"; openForm(null, gpsFix ? {lat:gpsFix.lat, lon:gpsFix.lon, acc:gpsFix.acc} : null); };
-function renderHeader(){ $("#hdrProj").textContent = settings.projeto || "Sem projeto definido"; }
+function renderHeader(){ $("#hdrProj").textContent = (settings.projeto || "Sem projeto definido") + " · " + APP_VERSION; }
 async function saveSettings(){ try { await DB.setKV("settings", settings); } catch {} }
 
 /* =========================================================
@@ -659,7 +668,7 @@ function renderMarkers(){
   markersLayer.clearLayers();
   records.filter(r => r.lat!=null).forEach(r => {
     const T = TYPES[r.tipo] || TYPES.outro;
-    const m = L.circleMarker([r.lat, r.lon], { radius:9, color:"#fff", weight:2.5, fillColor:T.hex, fillOpacity:1 });
+    const m = L.circleMarker([r.lat, r.lon], { radius:9, color:"#fff", weight:2.5, fillColor:recColor(r), fillOpacity:1 });
     m.bindTooltip(esc(r.codigo), { permanent:true, direction:"right", offset:[8,0], className:"lbl" });
     const sub = r.tipo==="edificio" ? [r.campos?.rua, r.campos?.numero].filter(Boolean).join(" ") : (r.campos?.ref || r.campos?.tipo || "");
     const html = `<div class="pop-code">${esc(r.codigo)}</div><div class="pop-meta">${esc(T.label)}${sub?" · "+esc(sub):""}</div><button class="pop-btn" data-open="${r.id}">Abrir registo</button>`;
@@ -1026,7 +1035,7 @@ function renderList(){
   $("#list").innerHTML = rows.map(r => {
     const T = TYPES[r.tipo] || TYPES.outro;
     const sub = r.tipo==="edificio" ? [r.campos?.rua, r.campos?.numero].filter(Boolean).join(" ") : (r.campos?.ref || r.campos?.tipo || "");
-    return `<li class="item"><span class="bar" style="background:${T.hex}"></span><button data-id="${r.id}">
+    return `<li class="item"><span class="bar" style="background:${recColor(r)}"></span><button data-id="${r.id}">
       ${r.fotos?.length ? `<img class="thumb" alt="" src="${r.fotos[0]}">` : `<span class="thumb empty">sem foto</span>`}
       <span class="txt"><span class="code">${esc(r.codigo||"sem código")}</span><span class="meta">${esc(T.label)}${sub?" · "+esc(sub):""}</span>
       <span class="meta">${fmtDate(r.atualizado)} · ${r.lat!=null?'<span class="ok">no mapa</span>':'<span class="no">sem coordenadas</span>'}</span></span></button></li>`;
@@ -1045,7 +1054,7 @@ const OWNER_TYPES = ["poste","camara"];
 function codePrefix(tipo, campos){ return (OWNER_TYPES.includes(tipo) && OWNER_PREFIX[campos?.proprietario]) || TYPES[tipo].prefix; }
 function nextCode(tipo, campos){
   const pre = codePrefix(tipo, campos) + "-"; let max = 0;
-  records.forEach(r => { if(r.tipo===tipo && r.codigo?.startsWith(pre)){ const n=parseInt(r.codigo.slice(pre.length),10); if(n>max) max=n; } });
+  records.forEach(r => { if(r.tipo===tipo && r.id!==editing?.id && r.codigo?.startsWith(pre)){ const n=parseInt(r.codigo.slice(pre.length),10); if(n>max) max=n; } });
   return pre + String(max+1).padStart(3,"0");
 }
 function showForm(){
@@ -1089,9 +1098,9 @@ function renderDyn(){
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed","false"));
     if(on) b.setAttribute("aria-pressed","true");
     // Mudar o proprietário de um poste ou câmara novos atualiza o prefixo do código
-    if(b.parentElement.dataset.k==="proprietario" && editing._new && OWNER_TYPES.includes(editing.tipo)){
+    if(b.parentElement.dataset.k==="proprietario" && OWNER_TYPES.includes(editing.tipo)){
       const cur = $("#f-codigo").value.trim().toUpperCase();
-      if(editing._autoCode || /^(PT|E|M|O|CV)-\d+$/.test(cur)){
+      if((editing._new && editing._autoCode) || /^(PT|E|M|O|CV)-\d+$/.test(cur)){
         collectDyn(); editing.codigo = nextCode(editing.tipo, editing.campos);
         $("#f-codigo").value = editing.codigo; editing._autoCode = true;
       }
@@ -1263,7 +1272,7 @@ function buildKML(withPhotos){
     const rs = sorted().filter(r => r.tipo===t && r.lat!=null); if(!rs.length) return;
     k += `<Folder><name>${esc(T.label)} (${rs.length})</name>\n`;
     rs.forEach(r => {
-      k += `<Placemark><name>${esc(r.codigo)}</name><styleUrl>#s_${t}</styleUrl><description>${kmlDesc(r, withPhotos)}</description><Point><coordinates>${r.lon.toFixed(7)},${r.lat.toFixed(7)},0</coordinates></Point></Placemark>\n`;
+      k += `<Placemark><name>${esc(r.codigo)}</name><styleUrl>#s_${t}</styleUrl>${r.tipo==="poste" && OWNER_COLORS[r.campos?.proprietario] ? `<Style><IconStyle><color>${kc(recColor(r))}</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>` : ""}<description>${kmlDesc(r, withPhotos)}</description><Point><coordinates>${r.lon.toFixed(7)},${r.lat.toFixed(7)},0</coordinates></Point></Placemark>\n`;
     });
     k += `</Folder>\n`;
   });
@@ -1301,9 +1310,11 @@ function buildDXF(){
   put(0,"SECTION"); put(2,"ENTITIES");
   sorted().filter(r => r.lat!=null).forEach(r => {
     const p = toPTTM06(r.lat, r.lon), lay = layers.find(l => l.t===r.tipo)?.name || "LEV_OT", X = p.x.toFixed(3), Y = p.y.toFixed(3);
-    put(0,"POINT"); put(8,lay); put(10,X); put(20,Y); put(30,"0.0");
-    put(0,"CIRCLE"); put(8,lay); put(10,X); put(20,Y); put(30,"0.0"); put(40,"0.5");
-    put(0,"TEXT"); put(8,lay); put(10,(p.x+0.8).toFixed(3)); put(20,(p.y+0.8).toFixed(3)); put(30,"0.0"); put(40,"1.0"); put(1, ascii(r.codigo));
+    const oc = r.tipo==="poste" ? OWNER_DXF[r.campos?.proprietario] : null;
+    const col = () => { if(oc) put(62, oc); };
+    put(0,"POINT"); put(8,lay); col(); put(10,X); put(20,Y); put(30,"0.0");
+    put(0,"CIRCLE"); put(8,lay); col(); put(10,X); put(20,Y); put(30,"0.0"); put(40,"0.5");
+    put(0,"TEXT"); put(8,lay); col(); put(10,(p.x+0.8).toFixed(3)); put(20,(p.y+0.8).toFixed(3)); put(30,"0.0"); put(40,"1.0"); put(1, ascii(r.codigo));
   });
   tracados.forEach(t => {
     const lay = layers.find(l => l.t==="tr_"+t.tipo).name;
@@ -1389,6 +1400,29 @@ $("#inImport").onchange = async e => {
   startGps();
 })();
 if("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+
+/* Aviso de versão nova: compara com o index.html publicado e, se for diferente, oferece atualizar */
+async function forceUpdate(){
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    for(const r of regs) await r.unregister();
+    for(const k of await caches.keys()) if(k.startsWith("lev-shell")) await caches.delete(k);
+  } catch {}
+  location.replace(location.pathname + "?v=" + Date.now());
+}
+async function checkUpdate(){
+  if(!navigator.onLine || location.protocol==="file:") return;
+  try {
+    const t = await (await fetch("./index.html?t=" + Date.now(), { cache:"no-store" })).text();
+    const m = t.match(/const APP_VERSION = "([^"]+)"/);
+    if(m && m[1] !== APP_VERSION){ $("#updTxt").textContent = `Há uma versão nova da app (${m[1]}).`; $("#updBar").hidden = false; }
+  } catch {}
+}
+$("#updBtn").onclick = forceUpdate;
+$("#verLbl").textContent = APP_VERSION;
+setTimeout(checkUpdate, 2500);
+addEventListener("online", checkUpdate);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState==="visible") checkUpdate(); });
 })();
 </script>
 </body>

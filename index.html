@@ -201,6 +201,11 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
 .cpsug button{text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:16px}
 .cpsug button small{display:block;color:var(--muted);font-size:13px}
 .cpsug .note{margin:0}.cpok{margin:0;font-size:14px;font-weight:600;color:var(--ok)}
+.numrow{display:flex;gap:8px}.numrow input{flex:1;min-width:0}
+.snbtn{flex:none;min-width:70px;border:1.5px solid var(--line);background:var(--surface);border-radius:10px;font-weight:700;font-family:"Barlow Condensed",sans-serif;font-size:18px}
+.dupwarn{margin:6px 0 0;font-size:14px;font-weight:600;color:var(--danger)}
+.prefill{font-size:14px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin:0 0 12px}
+.prefill button{border:0;background:none;color:var(--ink);font-weight:700;text-decoration:underline;padding:0 4px}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#16232C;color:#fff;padding:12px 18px;border-radius:10px;font-weight:500;z-index:2000;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
 </style>
@@ -268,6 +273,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
     <label class="btn primary block"><input class="sr" type="file" accept=".dxf" id="inDxf">Carregar DXF</label>
     <label class="btn primary block" style="margin-top:8px"><input class="sr" type="file" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" id="inKml">Carregar KML / KMZ</label>
     <div id="ovList" style="margin-top:12px"></div>
+    <div id="impList"></div>
     <label class="opt"><input type="checkbox" id="optSnap" checked> Ajustar ao desenho quando marco um ponto</label>
     <label class="opt"><input type="checkbox" id="optTxt" checked> Mostrar textos do desenho (com zoom)</label>
     <button class="btn block" id="dwgClose">Fechar</button>
@@ -552,7 +558,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v15";
+const APP_VERSION = "v17";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -824,12 +830,13 @@ function nearestSnap(latlng){
 }
 function renderOvList(){
   const box = $("#ovList");
-  if(!overlays.length){ box.innerHTML = `<p class="note">Ainda não carregaste nenhum desenho.</p>`; return; }
+  renderImpList();
+  if(!overlays.length){ box.innerHTML = imports.some(inActive) ? "" : `<p class="note">Ainda não carregaste nenhum desenho de referência.</p>`; return; }
   box.innerHTML = overlays.map((o,i) => `<div class="ov">
     <div class="ov-head"><label><input type="checkbox" data-vis="${i}" ${o.visible?"checked":""}><span>${esc(o.name)}</span></label></div>
     <small>${o.count} elementos · ${o.lays.length} layers${o.inPT ? "" : " · ⚠ coordenadas fora de PT-TM06"}</small>
     <details><summary>Layers</summary>${o.lays.map((L0,k) => `<label class="lay"><input type="checkbox" data-lay="${i}:${k}" ${L0.v?"checked":""}><i style="background:${L0.c}"></i>${esc(L0.n)}</label>`).join("")}</details>
-    <div class="ov-actions"><button class="btn" data-go="${i}">Ir para o desenho</button><button class="btn danger" data-del="${i}">Remover</button></div></div>`).join("");
+    <div class="ov-actions"><button class="btn" data-go="${i}">Ir para o desenho</button><button class="btn danger" data-del="${i}">Remover desenho</button></div></div>`).join("");
   box.querySelectorAll("[data-vis]").forEach(c => c.onchange = () => { overlays[+c.dataset.vis].visible = c.checked; renderOverlays(); saveOverlays(); });
   box.querySelectorAll("[data-lay]").forEach(c => c.onchange = () => { const [i,k] = c.dataset.lay.split(":").map(Number); overlays[i].lays[k].v = c.checked; renderOverlays(); saveOverlays(); });
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { zoomTo(overlays[+b.dataset.go]); $("#dwgSheet").hidden = true; $("#btnMarkHere").hidden = false; });
@@ -948,7 +955,7 @@ function guessTrType(it){
   return fach && t === "edp" ? "fedp" : fach && t === "pt" ? "fpt" : t;
 }
 async function importKmlEditable(){
-  const { name, items, zip } = kmlPending, now = new Date().toISOString(), proj = settings.projeto;
+  const { name, items, zip } = kmlPending, now = new Date().toISOString(), proj = settings.projeto, impId = uid();
   let nr = 0, nt = 0, skip = 0;
   const OWN = { "E":"E-Redes", "M":"Município", "O":"Outro", "PT":"MEO/PTC" };
   for(const it0 of items.filter(i => i.g === "P")){
@@ -968,7 +975,7 @@ async function importKmlEditable(){
       const mime = /\.png$/i.test(src) ? "image/png" : "image/jpeg";
       fotos.push(`data:${mime};base64,` + await zf.async("base64"));
     }
-    const rec = { id:uid(), tipo, codigo, campos:d.campos, fotos, lat:it.p[0], lon:it.p[1], acc:null, obs:d.obs, cor: it.color || undefined, projeto:proj, tecnico:settings.tecnico, criado:now, atualizado:now };
+    const rec = { id:uid(), tipo, codigo, campos:d.campos, fotos, lat:it.p[0], lon:it.p[1], acc:null, obs:d.obs, cor: it.color || undefined, imp:impId, projeto:proj, tecnico:settings.tecnico, criado:now, atualizado:now };
     await DB.put(rec); records.push(rec); nr++;
   }
   const near = p => { const r = records.find(x => (x.projeto||"") === proj && x.lat != null && haversine([x.lat, x.lon], p) < 0.5); return r ? r.codigo : ""; };
@@ -976,10 +983,11 @@ async function importKmlEditable(){
     const tipo = guessTrType(it);
     const nm = it.name && !tracados.some(t => t.nome === it.name && (t.projeto||"") === proj) ? it.name : nextTrName(tipo);
     if(tracados.some(t => t.nome === it.name && (t.projeto||"") === proj && t.pts.length === it.p.length)){ skip++; continue; }
-    tracados.push({ id:uid(), nome:nm, tipo, cor: it.color || undefined, pts:it.p, nos:it.p.map(near), comprimento:Math.round(lineLength(it.p)*10)/10, projeto:proj, tecnico:settings.tecnico, criado:now, atualizado:now });
+    tracados.push({ id:uid(), nome:nm, tipo, cor: it.color || undefined, imp:impId, pts:it.p, nos:it.p.map(near), comprimento:Math.round(lineLength(it.p)*10)/10, projeto:proj, tecnico:settings.tecnico, criado:now, atualizado:now });
     nt++;
   }
   if(nt) await saveTracados();
+  if(nr || nt){ imports.push({ id:impId, nome:name, data:now, projeto:proj, nr, nt }); await saveImports(); }
   const polys = items.filter(i => i.g === "A");
   if(polys.length){ overlays.push(kmlToOverlay(name + " (polígonos)", polys)); await saveOverlays(); renderOverlays(); }
   renderMarkers(); renderTracados();
@@ -1541,13 +1549,14 @@ function renderTypePick(){
   });
 }
 function renderDyn(){
+  prefillMorada();
   const T = TYPES[editing.tipo], c = editing.campos || {};
   $("#dynFields").innerHTML = `<legend>${esc(T.label)}</legend>` + T.fields.map(f => {
     const id = "d-"+f.k, v = c[f.k] ?? "";
     if(f.t==="seg") return `<div class="field"><span class="lbl" id="${id}-l">${esc(f.l)}</span><div class="seg" role="group" aria-labelledby="${id}-l" data-k="${f.k}">${f.o.map(o=>`<button type="button" data-v="${esc(o)}" aria-pressed="${v===o}">${esc(o)}</button>`).join("")}</div></div>`;
     return `<div class="field"><label for="${id}">${esc(f.l)}</label><input id="${id}" data-k="${f.k}" type="${f.t==="num"?"number":"text"}" ${f.t==="num"?'inputmode="decimal" step="any"':""} value="${esc(v)}"></div>`;
   }).join("");
-  if(editing.tipo === "edificio") hookCtt();
+  if(editing.tipo === "edificio"){ hookCtt(); hookEdificio(); }
   $("#dynFields").querySelectorAll(".seg button").forEach(b => b.onclick = () => {
     const on = b.getAttribute("aria-pressed") !== "true";
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed","false"));
@@ -1618,11 +1627,13 @@ $("#form").onsubmit = async e => {
   if(!editing.codigo){ toast("Dá um código ao elemento."); $("#f-codigo").focus(); return; }
   if(records.find(r => r.codigo===editing.codigo && r.tipo===editing.tipo && r.id!==editing.id && (r.projeto||"")===(editing.projeto||settings.projeto||"")) && !confirm(`Já existe ${TYPES[editing.tipo].label.toLowerCase()} ${editing.codigo}. Guardar mesmo assim?`)) return;
   if(editing.lat==null && !confirm("Este registo não tem coordenadas. Guardar assim?")) return;
+  if(editing.tipo === "edificio"){ const d = dupNumero(editing.campos?.rua, editing.campos?.numero);
+    if(d && !confirm(`Número repetido: já existe o nº ${editing.campos.numero} em ${editing.campos.rua} (${d.codigo}). Guardar mesmo assim?`)) return; }
   const now = new Date().toISOString();
   const orig = records.find(r => r.id === editing.id);
   if(editing.cor && orig && (orig.tipo !== editing.tipo || (orig.campos?.proprietario||"") !== (editing.campos?.proprietario||""))) delete editing.cor;
   const rec = Object.assign({}, editing, { atualizado:now, criado:editing.criado||now, projeto:editing.projeto||settings.projeto, tecnico:editing.tecnico||settings.tecnico });
-  delete rec._new; delete rec._autoCode;
+  delete rec._new; delete rec._autoCode; delete rec._prefill;
   try { await DB.put(rec); } catch { toast("Não foi possível guardar. O espaço do dispositivo pode estar cheio."); return; }
   const i = records.findIndex(r => r.id===rec.id); if(i>=0) records[i]=rec; else records.push(rec);
   editing = null; renderMarkers(); show(returnTo); toast(`${rec.codigo} guardado.`);
@@ -1718,7 +1729,8 @@ function hookCtt(){
   cp.closest(".field").insertAdjacentHTML("beforeend", '<div class="cpsug" id="cpSug"></div>');
   rua.setAttribute("list", "ruaList"); rua.setAttribute("autocomplete", "off");
   const box = $("#cpSug");
-  const apply = s => { cp.value = s.cp; loc.value = s.cpalf; if(s.rua) rua.value = s.rua;
+  cp.addEventListener("input", () => { cp.dataset.auto = ""; });
+  const apply = s => { cp.value = s.cp; cp.dataset.auto = "1"; loc.value = s.cpalf; if(s.rua) rua.value = s.rua;
     box.innerHTML = `<p class="cpok">✓ ${esc(s.cp)} ${esc(s.cpalf)} · base CTT</p>`; };
   const go = async () => {
     await ensureCtt();
@@ -1727,7 +1739,7 @@ function hookCtt(){
     const res = cttLookup(rua.value, num.value, loc.value);
     if(!res.length){ box.innerHTML = '<p class="note">Rua não encontrada na base CTT. Confirma o nome ou escreve o código postal à mão.</p>'; return; }
     const clear = res.length === 1 || res[0].sc > res[1].sc;
-    if(clear && (!cp.value || cp.value === res[0].cp)){ apply(res[0]); if(res.length === 1) return; }
+    if(clear && (!cp.value || cp.value === res[0].cp || cp.dataset.auto === "1")){ apply(res[0]); if(res.length === 1) return; }
     box.innerHTML = (clear ? "" : '<p class="note">Vários códigos possíveis, escolhe:</p>') + res.slice(clear ? 1 : 0).map((s, i) =>
       `<button type="button" data-i="${clear ? i+1 : i}"><b>${esc(s.cp)}</b> ${esc(s.cpalf)}<small>${esc(s.rua || s.lugar)}${s.troco ? " · " + esc(s.troco) : ""}</small></button>`).join("");
     box.querySelectorAll("button").forEach(b => b.onclick = () => apply(res[+b.dataset.i]));
@@ -1765,6 +1777,77 @@ $("#inCtt").onchange = async e => {
 };
 $("#btnCttDel").onclick = async () => { if(!confirm("Remover a base CTT deste dispositivo?")) return; await DB.setKV("ctt", null); ctt = false; cttMeta = null; renderCttInfo(); toast("Base CTT removida."); };
 
+/* ---------- Moradas: copiar a última morada, S/N numerados e aviso de nº repetido ---------- */
+const sameStreet = (a, b) => cttNorm(a) === cttNorm(b);
+const normNum = v => String(v || "").trim().toUpperCase().replace(/\s+/g, "");
+function lastEdificio(){
+  return records.filter(r => r.tipo === "edificio" && inActive(r) && r.id !== editing?.id && r.campos?.rua)
+    .sort((a,b) => (b.criado || "").localeCompare(a.criado || ""))[0] || null;
+}
+function prefillMorada(){
+  if(editing.tipo !== "edificio" || !editing._new || editing._prefill !== undefined) return;
+  const last = lastEdificio(); editing._prefill = last ? last.codigo : null;
+  if(!last) return;
+  editing.campos = editing.campos || {};
+  ["rua", "cp", "localidade"].forEach(k => { if(!editing.campos[k] && last.campos?.[k]) editing.campos[k] = last.campos[k]; });
+}
+function nextSN(rua){
+  let max = 0;
+  records.forEach(r => { if(r.tipo !== "edificio" || !inActive(r) || r.id === editing?.id) return;
+    if(rua && !sameStreet(r.campos?.rua, rua)) return;
+    const m = normNum(r.campos?.numero).match(/^S\/?N(\d+)$/); if(m) max = Math.max(max, +m[1]); });
+  return "SN" + (max + 1);
+}
+function dupNumero(rua, numero){
+  const n = normNum(numero); if(!n || !rua) return null;
+  return records.find(r => r.tipo === "edificio" && inActive(r) && r.id !== editing?.id && sameStreet(r.campos?.rua, rua) && normNum(r.campos?.numero) === n) || null;
+}
+function hookEdificio(){
+  const rua = $("#d-rua"), num = $("#d-numero"), cp = $("#d-cp"), loc = $("#d-localidade");
+  if(!rua || !num) return;
+  // aviso de morada copiada
+  if(editing._new && editing._prefill){
+    cp.dataset.auto = "1";
+    rua.closest(".field").insertAdjacentHTML("beforebegin", `<p class="prefill" id="prefillNote">Morada copiada do último registo (${esc(editing._prefill)}). <button type="button" id="prefillClear">Limpar</button></p>`);
+    $("#prefillClear").onclick = () => { rua.value = ""; cp.value = ""; loc.value = ""; $("#prefillNote").remove(); const s = $("#cpSug"); if(s) s.innerHTML = ""; rua.focus(); };
+  }
+  // botão S/N ao lado do nº de polícia
+  const wrap = document.createElement("div"); wrap.className = "numrow"; num.parentNode.insertBefore(wrap, num); wrap.appendChild(num);
+  wrap.insertAdjacentHTML("beforeend", '<button type="button" class="snbtn" id="snBtn">S/N</button>');
+  num.closest(".field").insertAdjacentHTML("beforeend", '<p class="dupwarn" id="dupWarn" hidden></p>');
+  const check = () => {
+    const d = dupNumero(rua.value, num.value), w = $("#dupWarn");
+    if(d){ w.hidden = false; w.textContent = `⚠ Número repetido: já existe o nº ${num.value.trim()} nesta rua (${d.codigo}).`; } else w.hidden = true;
+  };
+  $("#snBtn").onclick = () => { num.value = nextSN(rua.value); num.dispatchEvent(new Event("input")); check(); };
+  num.addEventListener("change", () => { if(/^s\.?\s*\/?\s*n\.?$/i.test(num.value.trim())){ num.value = nextSN(rua.value); } check(); });
+  num.addEventListener("input", check); rua.addEventListener("change", check); rua.addEventListener("input", check);
+  if(num.value) check();
+  if(editing._new && editing._prefill) setTimeout(() => num.focus(), 60);
+}
+
+/* ---------- Importações de KML: desfazer ---------- */
+let imports = [];
+async function saveImports(){ try { await DB.setKV("imports", imports); } catch {} }
+function renderImpList(){
+  const box = $("#impList"), list = imports.filter(inActive);
+  if(!list.length){ box.innerHTML = ""; return; }
+  box.innerHTML = `<p class="coords" style="margin:12px 0 6px">KML importados para este projeto (editáveis)</p>` + list.map(im => {
+    const nr = records.filter(r => r.imp === im.id).length, nt = tracados.filter(t => t.imp === im.id).length;
+    return `<div class="ov"><div class="ov-head"><label><span>${esc(im.nome)}</span></label></div><small style="margin-left:0">${fmtDate(im.data)} · ${nr} registos · ${nt} traçados</small>
+      <div class="ov-actions"><button class="btn danger" data-undo="${im.id}">Desfazer importação</button></div></div>`;
+  }).join("");
+  box.querySelectorAll("[data-undo]").forEach(b => b.onclick = async () => {
+    const im = imports.find(x => x.id === b.dataset.undo); if(!im) return;
+    const rs = records.filter(r => r.imp === im.id), ts = tracados.filter(t => t.imp === im.id);
+    if(!confirm(`Desfazer a importação de "${im.nome}"? Apaga ${rs.length} registos e ${ts.length} traçados que vieram desse ficheiro (incluindo alterações que lhes tenhas feito).`)) return;
+    for(const r of rs) await DB.del(r.id);
+    records = records.filter(r => r.imp !== im.id); tracados = tracados.filter(t => t.imp !== im.id); await saveTracados();
+    imports = imports.filter(x => x !== im); await saveImports();
+    renderMarkers(); renderTracados(); renderImpList(); toast(`Importação de ${im.nome} desfeita.`);
+  });
+}
+
 /* =========================================================
    PROJETOS
    ========================================================= */
@@ -1801,6 +1884,7 @@ $("#btnRenProj").onclick = async () => {
   for(const r of records.filter(r => (r.projeto||"") === old)){ r.projeto = n; await DB.put(r); }
   tracados.filter(t => (t.projeto||"") === old).forEach(t => t.projeto = n); await saveTracados();
   notas.filter(x => (x.projeto||"") === old).forEach(x => x.projeto = n); await saveNotas();
+  imports.filter(x => x.projeto === old).forEach(x => x.projeto = n); await saveImports();
   settings.projetos = (settings.projetos || []).map(p => p === old ? n : p); settings.projeto = n; await saveSettings(); refreshAll();
   toast(`Projeto renomeado para ${n}.`);
 };
@@ -1811,6 +1895,7 @@ $("#btnDelProj").onclick = async () => {
   for(const r of rs) await DB.del(r.id);
   records = records.filter(r => (r.projeto||"") !== p); tracados = tracados.filter(t => (t.projeto||"") !== p); await saveTracados();
   notas = notas.filter(x => (x.projeto||"") !== p); await saveNotas();
+  imports = imports.filter(x => x.projeto !== p); await saveImports();
   settings.projetos = (settings.projetos || []).filter(x => x !== p);
   const rest = allProjects().filter(x => x !== p);
   settings.projeto = rest[0] || "Projeto 1"; if(!rest.length) settings.projetos = ["Projeto 1"];
@@ -1848,7 +1933,8 @@ function renderExport(){
 const photoNames = r => {
   const dup = records.some(o => o!==r && o.id!==r.id && o.tipo===r.tipo && o.codigo===r.codigo);
   const base = safeName(r.codigo) + (dup ? "_" + r.id.slice(-4) : "");
-  return (r.fotos||[]).map((_,i) => `fotos/${r.tipo}/${base}_${i+1}.jpg`);
+  const n = (r.fotos||[]).length;
+  return (r.fotos||[]).map((_,i) => `fotos/${r.tipo}/${base}${n > 1 ? "_" + (i+1) : ""}.jpg`);
 };
 const sorted = () => PR().sort((a,b) => (a.tipo+a.codigo).localeCompare(b.tipo+b.codigo, "pt"));
 
@@ -1881,7 +1967,12 @@ function buildGeoJSON(){
     properties:{ tipo: n.kind === "area" ? "Nota (área)" : "Nota", titulo:n.titulo || "", informacao:n.texto || "", area_m2: n.kind === "area" ? Math.round(n.area || polyArea(n.pts)) : null, fotos:notaPhotoNames(n), projeto:n.projeto || "", atualizado:n.atualizado } }));
   return JSON.stringify({ type:"FeatureCollection", name:settings.projeto||"levantamento", features: pts.concat(lines, nts) }, null, 1);
 }
-const notaPhotoNames = n => (n.fotos || []).map((_,i) => `fotos/notas/${safeName(n.titulo || "nota")}_${n.id.slice(-4)}_${i+1}.jpg`);
+// Fotos das notas com o título da nota (Cao_no_quintal.jpg; várias: _1, _2); títulos repetidos levam um sufixo
+const notaPhotoNames = n => {
+  const dup = notas.some(o => o.id !== n.id && (o.titulo || "nota") === (n.titulo || "nota") && (o.fotos||[]).length);
+  const base = safeName(n.titulo || "nota") + (dup ? "_" + n.id.slice(-4) : ""), k = (n.fotos || []).length;
+  return (n.fotos || []).map((_,i) => `fotos/notas/${base}${k > 1 ? "_" + (i+1) : ""}.jpg`);
+};
 function buildNotasCSV(){
   const q = v => { const s = String(v ?? ""); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
   const lines = [["Titulo","Tipo","Informacao","Area_m2","X_PTTM06","Y_PTTM06","Vertices_PTTM06","N_fotos","Fotos","Projeto","Tecnico","Atualizado"].join(";")];
@@ -2137,6 +2228,7 @@ $("#inImport").onchange = async e => {
   try { overlays = (await DB.getKV("overlays")) || []; } catch { overlays = []; }
   try { tracados = (await DB.getKV("tracados")) || []; } catch { tracados = []; }
   try { notas = (await DB.getKV("notas")) || []; } catch { notas = []; }
+  try { imports = (await DB.getKV("imports")) || []; } catch { imports = []; }
   // Migração: garante um projeto ativo e põe registos sem projeto no projeto ativo
   if(!settings.projeto) settings.projeto = "Projeto 1";
   settings.projetos = [...new Set([...(settings.projetos || []), settings.projeto])];

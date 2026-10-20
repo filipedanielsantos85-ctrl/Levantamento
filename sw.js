@@ -1,4 +1,4 @@
-const SHELL_CACHE = "lev-shell-v1";
+const SHELL_CACHE = "lev-shell-v2";
 const TILE_CACHE = "lev-tiles";
 const SHELL = [
   "./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
@@ -41,7 +41,7 @@ self.addEventListener("fetch", e => {
   }
   // A própria app: rede primeiro (para receber atualizações), cache sem rede
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(r => { const cp = r.clone(); caches.open(SHELL_CACHE).then(c => c.put(req, cp)); return r; })
+    e.respondWith(fetch(req, { cache:"no-store" }).then(r => { const cp = r.clone(); caches.open(SHELL_CACHE).then(c => c.put(req, cp)); return r; })
       .catch(() => caches.match(req).then(h => h || caches.match("./index.html"))));
   }
 });

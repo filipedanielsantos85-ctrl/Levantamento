@@ -206,6 +206,10 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
 .dupwarn{margin:6px 0 0;font-size:14px;font-weight:600;color:var(--danger)}
 .prefill{font-size:14px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin:0 0 12px}
 .prefill button{border:0;background:none;color:var(--ink);font-weight:700;text-decoration:underline;padding:0 4px}
+.tipbuild{border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;background:var(--surface)}
+.tipbuild .lbl{display:block;font-size:15px;font-weight:700;margin-bottom:8px}
+.tipbuild select{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);padding:0 10px}
+.tipbuild .note{margin:8px 0 0}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#16232C;color:#fff;padding:12px 18px;border-radius:10px;font-weight:500;z-index:2000;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
 </style>
@@ -558,7 +562,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v17";
+const APP_VERSION = "v20";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -597,9 +601,10 @@ const TYPES = {
     {k:"cp", l:"Código postal", t:"text"},
     {k:"localidade", l:"Localidade", t:"text"},
     {k:"tipologia", l:"Tipologia", t:"seg", o:["Moradia","Edifício","Empresarial","Misto"]},
+    {k:"tipificacao", l:"Tipificação (texto, podes escrever à mão)", t:"text"},
     {k:"fogos", l:"Nº de fogos / frações", t:"num"},
     {k:"pisos", l:"Nº de pisos", t:"num"},
-    {k:"entrada", l:"Entrada de cabo", t:"seg", o:["Aérea","Fachada","Subterrânea","A definir"]},
+    {k:"entrada", l:"Entrada de cabo", t:"seg", o:["Aérea","Fachada","Subterrânea","Interior","A definir"]},
     {k:"ited", l:"ITED / ATE", t:"seg", o:["Sim","Não","Desconhecido"]}
   ]},
   outro: { label:"Outro", prefix:"OT", color:"--t-outro", hex:"#5B6870", dxf:8, fields:[
@@ -1184,6 +1189,8 @@ function bindTrPopup(popup){
     t.tipo = b.dataset.trtype; t.nome = nextTrName(t.tipo); delete t.cor; t.atualizado = new Date().toISOString();
     await saveTracados(); renderTracados(); popup.setContent(trPopup(t)); bindTrPopup(popup);
   });
+  const tm = el.querySelector("[data-trmove]");
+  if(tm) tm.onclick = () => { const t = tracados.find(x => x.id === tm.dataset.trmove); if(t) startEditTr(t); };
   const d = el.querySelector("[data-trdel]");
   if(d) d.onclick = async () => {
     const t = tracados.find(x => x.id===d.dataset.trdel); if(!t || !confirm(`Apagar o traçado ${t.nome}?`)) return;
@@ -1191,6 +1198,16 @@ function bindTrPopup(popup){
   };
 }
 map.on("popupopen", e => bindTrPopup(e.popup));
+// Apagar um registo a partir do balão do mapa
+map.on("popupopen", e => {
+  const b = e.popup.getElement()?.querySelector("[data-recdel]"); if(!b) return;
+  b.onclick = async () => {
+    const r = records.find(x => x.id===b.dataset.recdel); if(!r) return;
+    if(!confirm(`Apagar ${r.codigo}${r.fotos?.length ? ` e as ${r.fotos.length} fotos` : ""}? Esta ação não se desfaz.`)) return;
+    try { await DB.del(r.id); } catch { toast("Não foi possível apagar."); return; }
+    records = records.filter(x => x.id!==r.id); map.closePopup(); renderMarkers(); toast(`${r.codigo} apagado.`);
+  };
+});
 
 /* ---------- Mover pontos (registos e notas) e editar vértices (traçados e áreas) ---------- */
 let editMode = null;
@@ -1556,8 +1573,8 @@ function renderDyn(){
     if(f.t==="seg") return `<div class="field"><span class="lbl" id="${id}-l">${esc(f.l)}</span><div class="seg" role="group" aria-labelledby="${id}-l" data-k="${f.k}">${f.o.map(o=>`<button type="button" data-v="${esc(o)}" aria-pressed="${v===o}">${esc(o)}</button>`).join("")}</div></div>`;
     return `<div class="field"><label for="${id}">${esc(f.l)}</label><input id="${id}" data-k="${f.k}" type="${f.t==="num"?"number":"text"}" ${f.t==="num"?'inputmode="decimal" step="any"':""} value="${esc(v)}"></div>`;
   }).join("");
-  if(editing.tipo === "edificio"){ hookCtt(); hookEdificio(); }
-  $("#dynFields").querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  if(editing.tipo === "edificio"){ hookCtt(); hookEdificio(); hookTipificacao(); }
+  $("#dynFields").querySelectorAll(".seg:not(.multi) button").forEach(b => b.onclick = () => {
     const on = b.getAttribute("aria-pressed") !== "true";
     b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed","false"));
     if(on) b.setAttribute("aria-pressed","true");
@@ -1574,7 +1591,7 @@ function renderDyn(){
 function collectDyn(){
   const out = {};
   $("#dynFields").querySelectorAll("input[data-k]").forEach(i => { if(i.value!=="") out[i.dataset.k] = i.value.trim(); });
-  $("#dynFields").querySelectorAll(".seg").forEach(s => { const p = s.querySelector('[aria-pressed="true"]'); if(p) out[s.dataset.k] = p.dataset.v; });
+  $("#dynFields").querySelectorAll(".seg[data-k]").forEach(s => { const p = s.querySelector('[aria-pressed="true"]'); if(p) out[s.dataset.k] = p.dataset.v; });
   editing.campos = Object.assign({}, editing.campos, out);
   TYPES[editing.tipo].fields.forEach(f => { if(!(f.k in out)) delete editing.campos[f.k]; });
 }
@@ -1776,6 +1793,59 @@ $("#inCtt").onchange = async e => {
   }
 };
 $("#btnCttDel").onclick = async () => { if(!confirm("Remover a base CTT deste dispositivo?")) return; await DB.setKV("ctt", null); ctt = false; cttMeta = null; renderCttInfo(); toast("Base CTT removida."); };
+
+/* ---------- Tipificação de frações (Edifício / Empresarial / Misto): pisos de/até e posições ---------- */
+const TIP_POS = [["ESQ","Esquerdo"],["DTO","Direito"],["FRENTE","Frente"],["TRAS","Traseiras"],["CENTRO","Centro"]];
+const TIP_TIPOS = ["Edifício","Empresarial","Misto"];
+const pisoLbl = n => n === 0 ? "0 (R/C)" : n < 0 ? `${n} (cave)` : String(n);
+function tipString(de, ate, pos, extra){
+  const toks = [...pos, ...String(extra || "").toUpperCase().split(/[\s,;]+/).filter(Boolean)];
+  if(de == null || ate == null || !toks.length) return "";
+  return `${de === ate ? de : de + "/" + ate} ${toks.join(" ")}`;
+}
+function hookTipificacao(){
+  const tipInp = $("#d-tipificacao"), fogos = $("#d-fogos"); if(!tipInp) return;
+  const field = tipInp.closest(".field"), c = editing.campos || {};
+  // estado inicial: guardado no registo ou lido do texto ("0/3 ESQ DTO")
+  let de = c.tip_de != null ? +c.tip_de : null, ate = c.tip_ate != null ? +c.tip_ate : null;
+  let pos = c.tip_pos ? c.tip_pos.split(" ").filter(Boolean) : [], extra = c.tip_extra || "";
+  if(de == null && c.tipificacao){ const m = c.tipificacao.trim().toUpperCase().match(/^(-?\d+)(?:\s*\/\s*(-?\d+))?\s+(.+)$/);
+    if(m){ de = +m[1]; ate = m[2] != null ? +m[2] : de; const t = m[3].split(/\s+/); pos = t.filter(x => TIP_POS.some(p => p[0] === x)); extra = t.filter(x => !TIP_POS.some(p => p[0] === x)).join(" "); } }
+  const opts = sel => { let h = ""; for(let n = -2; n <= 20; n++) h += `<option value="${n}" ${n === sel ? "selected" : ""}>${pisoLbl(n)}</option>`; return h; };
+  field.insertAdjacentHTML("beforebegin", `<div class="tipbuild" id="tipBuild">
+    <span class="lbl">Tipificação das frações</span>
+    <div class="row2"><div class="field"><label for="tipDe">Do piso</label><select id="tipDe">${opts(de ?? 0)}</select></div>
+      <div class="field"><label for="tipAte">Até ao piso</label><select id="tipAte">${opts(ate ?? 0)}</select></div></div>
+    <div class="seg multi" id="tipPos">${TIP_POS.map(([k,l]) => `<button type="button" data-v="${k}" aria-pressed="${pos.includes(k)}">${l}</button>`).join("")}</div>
+    <div class="field" style="margin-top:10px"><label for="tipExtra">Outras frações por piso (opcional, ex.: A B C)</label><input id="tipExtra" type="text" autocapitalize="characters" value="${esc(extra)}"></div>
+    <p class="note" id="tipCount"></p></div>`);
+  const box = $("#tipBuild"), sDe = $("#tipDe"), sAte = $("#tipAte"), ex = $("#tipExtra");
+  let manual = !!c.tipificacao && c.tipificacao !== tipString(de, ate, pos, extra);
+  const state = () => {
+    const d = +sDe.value, a = Math.max(+sAte.value, d), ps = [...box.querySelectorAll("#tipPos [aria-pressed=true]")].map(b => b.dataset.v);
+    if(+sAte.value < d) sAte.value = d;
+    return { d, a, ps, extra: ex.value.trim().toUpperCase() };
+  };
+  const update = fromBuilder => {
+    const st = state(), nExtra = st.extra ? st.extra.split(/[\s,;]+/).filter(Boolean).length : 0, porPiso = st.ps.length + nExtra, pisos = st.a - st.d + 1;
+    Object.assign(editing.campos, { tip_de:st.d, tip_ate:st.a, tip_pos:st.ps.join(" "), tip_extra:st.extra });
+    if(fromBuilder) manual = false;
+    if(!manual) tipInp.value = tipString(st.d, st.a, st.ps, st.extra);
+    const ua = porPiso * pisos;
+    $("#tipCount").textContent = porPiso ? `${pisos} piso(s) × ${porPiso} fração(ões) = ${ua} frações` + (manual ? " · texto escrito à mão (se mexeres nas opções de cima, volta a ser gerado)" : "") : "Escolhe as posições das frações em cada piso.";
+    if(fromBuilder && fogos && porPiso && (!fogos.value || fogos.dataset.auto === "1")){ fogos.value = ua; fogos.dataset.auto = "1"; }
+  };
+  box.querySelectorAll("#tipPos button").forEach(b => b.onclick = () => { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); update(true); });
+  [sDe, sAte].forEach(s => s.onchange = () => update(true)); ex.addEventListener("input", () => update(true));
+  tipInp.addEventListener("input", () => { manual = true; update(false); });
+  if(fogos) fogos.addEventListener("input", () => { fogos.dataset.auto = ""; });
+  const toggle = () => {
+    const t = $('.seg[data-k="tipologia"] [aria-pressed="true"]')?.dataset.v, show = TIP_TIPOS.includes(t);
+    box.hidden = !show; field.hidden = !show && !tipInp.value;
+  };
+  $('.seg[data-k="tipologia"]').addEventListener("click", () => setTimeout(toggle, 0));
+  toggle(); update(false);
+}
 
 /* ---------- Moradas: copiar a última morada, S/N numerados e aviso de nº repetido ---------- */
 const sameStreet = (a, b) => cttNorm(a) === cttNorm(b);

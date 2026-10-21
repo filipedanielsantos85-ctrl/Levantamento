@@ -562,7 +562,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v20";
+const APP_VERSION = "v21";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -2299,6 +2299,22 @@ $("#inImport").onchange = async e => {
   try { tracados = (await DB.getKV("tracados")) || []; } catch { tracados = []; }
   try { notas = (await DB.getKV("notas")) || []; } catch { notas = []; }
   try { imports = (await DB.getKV("imports")) || []; } catch { imports = []; }
+  // Importações antigas (antes da v16): os elementos de uma importação têm todos a mesma hora de criação, ao milésimo de segundo
+  {
+    const groups = new Map();
+    const add = (kind, x) => { if(x.imp || !x.criado) return; const key = (x.projeto || "") + "|" + x.criado; if(!groups.has(key)) groups.set(key, []); groups.get(key).push([kind, x]); };
+    records.forEach(r => add("r", r)); tracados.forEach(t => add("t", t));
+    let found = 0;
+    for(const [key, arr] of groups){
+      if(arr.length < 2) continue;
+      const id = uid(), data = key.slice(key.indexOf("|") + 1), proj = key.slice(0, key.indexOf("|"));
+      for(const [kind, x] of arr){ x.imp = id; if(kind === "r"){ try { await DB.put(x); } catch {} } }
+      imports.push({ id, nome:`KML importado em ${fmtDate(data)}`, data, projeto:proj, antigo:true,
+        nr: arr.filter(a => a[0] === "r").length, nt: arr.filter(a => a[0] === "t").length });
+      found++;
+    }
+    if(found){ await saveTracados(); await saveImports(); }
+  }
   // Migração: garante um projeto ativo e põe registos sem projeto no projeto ativo
   if(!settings.projeto) settings.projeto = "Projeto 1";
   settings.projetos = [...new Set([...(settings.projetos || []), settings.projeto])];

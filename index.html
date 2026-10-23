@@ -217,6 +217,8 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
 .tipbuild .lbl{display:block;font-size:15px;font-weight:700;margin-bottom:8px}
 .tipbuild select{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);padding:0 10px}
 .tipbuild .note{margin:8px 0 0}
+.voicebox{margin-bottom:14px}#voiceLive{margin:8px 0 0;font-size:14px}
+.voicebtn.listening{background:#D7261E;color:#fff;border-color:#D7261E}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#16232C;color:#fff;padding:12px 18px;border-radius:10px;font-weight:500;z-index:2000;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
 </style>
@@ -258,6 +260,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
     <p class="coords" id="notaSub"></p>
     <div class="field"><label for="n-titulo">Título</label><input id="n-titulo" type="text" placeholder="ex.: Acesso pelo quintal, cão"></div>
     <div class="field"><label for="n-texto">Informação</label><textarea id="n-texto" placeholder="O que é pertinente registar aqui…"></textarea></div>
+    <button type="button" class="btn block voicebtn" id="nVoice">🎤 Ditar</button><p class="note" id="nVoiceLive" style="margin:6px 0 10px"></p>
     <div class="photos" id="notaFotos"></div>
     <div class="btnrow">
       <label class="btn"><input class="sr" type="file" accept="image/*" capture="environment" id="nCam">Tirar foto</label>
@@ -331,6 +334,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
     <form id="form" novalidate>
       <div class="form-head"><h2 id="formTitle">Novo registo</h2><button type="button" id="formX" aria-label="Fechar">×</button></div>
       <div class="typepick" id="typepick" role="group" aria-label="Tipo de elemento"></div>
+      <div class="voicebox"><button type="button" class="btn block voicebtn" id="btnVoice">🎤 Ditar a informação</button><p class="note" id="voiceLive" hidden></p></div>
       <fieldset>
         <legend>Identificação</legend>
         <div class="field"><label for="f-codigo">Código</label><input id="f-codigo" type="text" class="code-input" autocomplete="off" autocapitalize="characters"></div>
@@ -576,7 +580,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v22";
+const APP_VERSION = "v23";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -1723,7 +1727,7 @@ $("#form").onsubmit = async e => {
   const orig = records.find(r => r.id === editing.id);
   if(editing.cor && orig && (orig.tipo !== editing.tipo || (orig.campos?.proprietario||"") !== (editing.campos?.proprietario||""))) delete editing.cor;
   const rec = Object.assign({}, editing, { atualizado:now, criado:editing.criado||now, projeto:editing.projeto||settings.projeto, tecnico:editing.tecnico||settings.tecnico });
-  delete rec._new; delete rec._autoCode; delete rec._prefill;
+  delete rec._new; delete rec._autoCode; delete rec._prefill; delete rec._geoDone;
   try { await DB.put(rec); } catch { toast("Não foi possível guardar. O espaço do dispositivo pode estar cheio."); return; }
   const i = records.findIndex(r => r.id===rec.id); if(i>=0) records[i]=rec; else records.push(rec);
   editing = null; renderMarkers(); show(returnTo); toast(`${rec.codigo} guardado.`);
@@ -1948,6 +1952,10 @@ function dupNumero(rua, numero){
 function hookEdificio(){
   const rua = $("#d-rua"), num = $("#d-numero"), cp = $("#d-cp"), loc = $("#d-localidade");
   if(!rua || !num) return;
+  // morada pela localização (automática ao criar, com rede)
+  rua.closest(".field").insertAdjacentHTML("beforebegin", '<button type="button" class="btn block" id="btnGeo" style="margin-bottom:8px">📍 Morada pela localização</button><p class="prefill" id="geoNote" hidden></p>');
+  $("#btnGeo").onclick = () => fillMoradaFromLocation(false);
+  if(editing._new && editing.lat != null && !editing._geoDone){ editing._geoDone = true; setTimeout(() => fillMoradaFromLocation(true), 50); }
   // aviso de morada copiada
   if(editing._new && editing._prefill){
     cp.dataset.auto = "1";
@@ -1990,6 +1998,158 @@ function renderImpList(){
     renderMarkers(); renderTracados(); renderImpList(); toast(`Importação de ${im.nome} desfeita.`);
   });
 }
+
+/* ---------- Morada pela localização (OpenStreetMap / Nominatim, precisa de rede) ---------- */
+const geoCache = new Map(); let geoLast = 0;
+async function reverseGeocode(lat, lon){
+  const key = lat.toFixed(5) + "," + lon.toFixed(5); if(geoCache.has(key)) return geoCache.get(key);
+  const wait = 1100 - (Date.now() - geoLast); if(wait > 0) await new Promise(r => setTimeout(r, wait));
+  geoLast = Date.now();
+  const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=pt`, { headers:{ "Accept":"application/json" } });
+  if(!r.ok) throw new Error("http");
+  const a = (await r.json()).address || {};
+  const res = { rua: a.road || a.pedestrian || a.residential || a.footway || a.path || a.square || "", numero: a.house_number || "",
+    cp: /^\d{4}-\d{3}$/.test(a.postcode || "") ? a.postcode : "", localidade: a.village || a.town || a.city || a.hamlet || a.suburb || a.city_district || "" };
+  geoCache.set(key, res); return res;
+}
+async function fillMoradaFromLocation(auto){
+  const rua = $("#d-rua"), num = $("#d-numero"), cp = $("#d-cp"), loc = $("#d-localidade"), note = $("#geoNote");
+  if(!rua || editing.lat == null){ if(!auto) toast("Este registo ainda não tem posição."); return; }
+  if(!navigator.onLine){ if(!auto) toast("A morada pela localização precisa de rede."); return; }
+  note.hidden = false; note.textContent = "A procurar a morada deste ponto…";
+  let g; try { g = await reverseGeocode(editing.lat, editing.lon); } catch { note.textContent = "Não foi possível obter a morada (sem resposta do OpenStreetMap)."; return; }
+  if(!$("#d-rua") || $("#d-rua") !== rua) return; // a ficha mudou entretanto
+  if(!g.rua){ note.textContent = "O OpenStreetMap não tem rua para este ponto. Escreve-a ou dita-a."; return; }
+  if(auto && rua.value && sameStreet(rua.value, g.rua)){ note.hidden = true; return; } // a morada copiada já é desta rua
+  rua.value = g.rua; if(g.numero && !num.value) num.value = g.numero;
+  if(g.localidade) loc.value = g.localidade;
+  cp.value = g.cp; cp.dataset.auto = "1";
+  $("#prefillNote")?.remove();
+  note.textContent = `📍 Morada sugerida pela localização (OpenStreetMap)${g.numero ? "" : ", sem nº de polícia"}. Confirma.`;
+  rua.dispatchEvent(new Event("change")); num.dispatchEvent(new Event("input"));
+}
+
+/* ---------- Ditado por voz: preenche a ficha a partir do que dizes ---------- */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recNow = null;
+function listen(btn, live, idleLabel, onFinal){
+  if(recNow){ recNow.stop(); return; }
+  if(!SpeechRec){ toast("Este navegador não tem ditado. Usa o Chrome, ou o microfone do teclado."); return; }
+  const rec = new SpeechRec(); recNow = rec;
+  rec.lang = "pt-PT"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  let fin = "";
+  btn.classList.add("listening"); btn.textContent = "● A ouvir… (toca para parar)"; live.hidden = false; live.textContent = "Fala agora…";
+  rec.onresult = e => { let inter = ""; for(let i = e.resultIndex; i < e.results.length; i++){ const t = e.results[i][0].transcript; if(e.results[i].isFinal) fin += t + " "; else inter += t; } live.textContent = "«" + (fin + inter).trim() + "»"; };
+  rec.onerror = e => { live.textContent = e.error === "not-allowed" ? "Autoriza o microfone para esta página nas definições do navegador." : e.error === "network" ? "O ditado precisa de rede." : e.error === "no-speech" ? "Não ouvi nada. Tenta outra vez." : "Não percebi. Tenta outra vez."; };
+  rec.onend = () => { recNow = null; btn.classList.remove("listening"); btn.textContent = idleLabel; if(fin.trim()) onFinal(fin.trim()); };
+  try { rec.start(); } catch { recNow = null; btn.classList.remove("listening"); btn.textContent = idleLabel; }
+}
+// números ditos por extenso → algarismos
+const NUMW = { dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8, nove:9, dez:10, onze:11, doze:12, treze:13, catorze:14, quatorze:14, quinze:15,
+  dezasseis:16, dezesseis:16, dezassete:17, dezessete:17, dezoito:18, dezanove:19, dezenove:19, vinte:20, trinta:30, quarenta:40, cinquenta:50, sessenta:60, setenta:70,
+  oitenta:80, noventa:90, cem:100, cento:100, duzentos:200, trezentos:300, quatrocentos:400, quinhentos:500, seiscentos:600, setecentos:700, oitocentos:800, novecentos:900, zero:0 };
+const UNITW = /^(piso|pisos|fogo|fogos|cabo|cabos|tubo|tubos|metro|metros|andar|andares|porta|portas|fracao|fracoes|apartamento|apartamentos|livre|livres)$/;
+const deacc = s => s.replace(/[áàâã]/g,"a").replace(/[éê]/g,"e").replace(/í/g,"i").replace(/[óôõ]/g,"o").replace(/ú/g,"u").replace(/ç/g,"c"); // mantém o comprimento
+function wordsToDigits(t){
+  const w = t.split(/(\s+)/), out = [];
+  for(let i = 0; i < w.length; i++){
+    const k = deacc(w[i]);
+    if((k === "um" || k === "uma") && UNITW.test(deacc(w[i+2] || ""))){ out.push("1"); continue; }
+    out.push(NUMW[k] != null ? String(NUMW[k]) : w[i]);
+  }
+  return out.join("")
+    .replace(/(\d+)\s+e\s+(\d+)/g, (m, a, b) => (+a % 10 === 0 && +b < +a && (+a >= 20)) ? String(+a + +b) : m)
+    .replace(/(\d+)\s+e\s+(\d+)/g, (m, a, b) => (+a % 100 === 0 && +b < 100) ? String(+a + +b) : m)
+    .replace(/(\d+)\s*(?:virgula|vírgula)\s*(\d+)/g, "$1.$2");
+}
+const titleCase = s => s.replace(/\s+/g, " ").trim().split(" ").map((w,i) => (i && /^(de|da|do|das|dos|e)$/.test(w)) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+function parseSpeech(raw, tipo, isNew){
+  let T = wordsToDigits(raw.toLowerCase().replace(/[.!?]+/g, " ").replace(/\s*,\s*/g, ", "));
+  const out = { campos:{}, obs:"", tipo:null, tip:null };
+  // observações: tudo o que vem depois
+  let n = deacc(T), m = n.match(/\b(observacoes|observacao|notas?)\b[:,\s]*/);
+  if(m){ out.obs = T.slice(m.index + m[0].length).trim(); out.obs = out.obs.charAt(0).toUpperCase() + out.obs.slice(1); T = T.slice(0, m.index); n = deacc(T); }
+  // tipo de elemento dito no início (só em registos novos)
+  if(isNew){ const h = n.trim().split(/\s+/).slice(0, 2).join(" ");
+    const tt = /\bposte\b/.test(h) ? "poste" : /\b(camara|cvr|cvp)\b/.test(h) ? "camara" : /\b(pdo|jfo|jso|caixa)\b/.test(h) ? "pdo" : /\b(moradia|edificio|predio|morada|casa)\b/.test(h) ? "edificio" : null;
+    if(tt && tt !== tipo){ out.tipo = tt; tipo = tt; } }
+  const C = out.campos, has = re => re.test(n), num = re => { const x = n.match(re); return x ? x[1].replace(",", ".") : null; };
+  const owner = () => { if(has(/\b(e-?redes|e redes|edp)\b/)) C.proprietario = "E-Redes"; else if(has(/\b(meo|ptc|altice)\b/) || has(/\bpt\b/)) C.proprietario = "MEO/PTC"; else if(has(/\bmunicipi|camara municipal\b/)) C.proprietario = "Município"; else if(has(/\boutro proprietario\b/)) C.proprietario = "Outro"; };
+  const estado = () => { if(has(/\bmau\b|mal estado|estragad|partid/)) C.estado = "Mau"; else if(has(/\brazoavel\b/)) C.estado = "Razoável"; else if(has(/\bbom\b|\bboa\b/)) C.estado = "Bom"; };
+  const ref = () => { const x = T.match(/\b(?:placa|refer[eê]ncia|etiqueta|n[uú]mero do poste)\s*(?:n[uú]mero\s*)?([a-z0-9][a-z0-9\-\/]*)/i); if(x) C.ref = x[1].toUpperCase(); };
+  if(tipo === "poste"){
+    owner(); ref(); estado();
+    if(has(/\bbetao\b/)) C.material = "Betão"; else if(has(/\bmadeira\b/)) C.material = "Madeira"; else if(has(/\bmetalic|\bmetal\b|\bferro\b/)) C.material = "Metálico"; else if(has(/\bfibra\b/)) C.material = "Fibra";
+    const alt = num(/altura\s*(?:de\s*)?(\d+(?:[.,]\d+)?)/) || num(/(\d+(?:[.,]\d+)?)\s*(?:metros|metro|m)\b/); if(alt) C.altura = alt;
+    const esf = num(/esforco\s*(?:de\s*)?(\d+)/) || num(/(\d+)\s*(?:deca ?newtons?|dan)\b/); if(esf) C.esforco = esf;
+    const cab = num(/(\d+)\s*cabos?\b/); if(cab) C.cabos = cab;
+    if(has(/\bsem espaco\b|nao (?:tem|ha) espaco/)) C.espaco = "Não"; else if(has(/\b(com|tem|ha) espaco\b/)) C.espaco = "Sim"; else if(has(/verificar espaco|espaco a verificar/)) C.espaco = "A verificar";
+  } else if(tipo === "camara"){
+    owner(); ref(); estado();
+    if(has(/\bcvr\b/)) C.tipo = "CVR"; else if(has(/\bcvp\b/)) C.tipo = "CVP"; else if(has(/\bcaixa\b/)) C.tipo = "Caixa";
+    if(has(/ferro/)) C.tampa = "Ferro fundido"; else if(has(/tampa (?:de )?betao|betao/)) C.tampa = "Betão"; else if(has(/composit/)) C.tampa = "Compósito";
+    const d = n.match(/(\d+)\s*(?:por|x)\s*(\d+)/); if(d) C.dimensoes = d[1] + "x" + d[2];
+    const liv = num(/(\d+)\s*(?:tubos?\s*)?livres?\b/); if(liv) C.tubos_livres = liv;
+    const tub = num(/(\d+)\s*tubos?\b(?!\s*livres?)/); if(tub) C.tubos = tub;
+    if(has(/com agua|lama|alagad|inundad/)) C.agua = "Sim"; else if(has(/\bseca\b|sem agua/)) C.agua = "Não";
+  } else if(tipo === "pdo"){
+    ref(); estado();
+    if(has(/\bjfo\b/)) C.tipo = "JFO"; else if(has(/\bjso\b/)) C.tipo = "JSO"; else if(has(/\bpdo\b/)) C.tipo = "PDO";
+    if(has(/\bfachada\b/)) C.montagem = "Fachada"; else if(has(/\bposte\b/)) C.montagem = "Poste"; else if(has(/\bcamara\b/)) C.montagem = "Câmara"; else if(has(/\barmario\b/)) C.montagem = "Armário";
+    const cap = num(/(\d+)\s*portas\b/) || num(/capacidade\s*(?:de\s*)?(\d+)/); if(cap) C.capacidade = cap;
+    const oc = num(/(\d+)\s*(?:portas\s*)?ocupadas\b/) || num(/ocupadas\s*(\d+)/); if(oc) C.ocupadas = oc;
+    const alt = num(/(\d+(?:[.,]\d+)?)\s*(?:metros|metro|m)\b/); if(alt) C.altura = alt;
+  } else if(tipo === "edificio"){
+    const STOP = /\b(numero|n\.?º|nº|porta|sem numero|codigo|localidade|moradia|edificio|predio|empresarial|comercial|loja|misto|\d+\s*(?:pisos?|andares?|fogos?|fracoes|fracao|apartamentos?|casas?)|pisos?|andares?|do piso|de \d|do \d|res do chao|entrada|ited|esquerdo|direito|frente|traseiras?|centro|aerea|fachada|subterranea|interior)\b|,/;
+    const rm = n.match(/\b(rua|avenida|av|travessa|largo|praca|estrada|caminho|beco|alameda|rotunda|urbanizacao|calcada|quinta|viela|bairro|lugar|praceta)\b/);
+    if(rm){ const rest = n.slice(rm.index), st = rest.slice(rm[0].length).search(STOP); let val = T.slice(rm.index, st >= 0 ? rm.index + rm[0].length + st : undefined).trim();
+      const tail = val.match(/\s(\d+\s*[a-z]?)$/); if(tail && !/numero|nº/.test(n)){ C.numero = tail[1].replace(/\s/g, "").toUpperCase(); val = val.slice(0, tail.index); }
+      C.rua = titleCase(val.replace(/,$/, "")); }
+    const nm = n.match(/\b(?:numero|n\.?º|nº|porta)\s*(\d+\s*[a-z]?)\b/); if(nm) C.numero = nm[1].replace(/\s/g, "").toUpperCase();
+    if(has(/\bsem numero\b|\bs\/n\b/)) C.numero = "__SN__";
+    const cpm = n.match(/\b(\d{4})\s*[- ]?\s*(\d{3})\b/); if(cpm) C.cp = cpm[1] + "-" + cpm[2];
+    const lm = n.match(/\blocalidade\s+(?:de\s+)?(.+?)(?=,|\s+(?:numero|codigo|moradia|edificio|predio|empresarial|misto|entrada|ited|\d)|$)/); if(lm) C.localidade = titleCase(T.slice(lm.index + lm[0].indexOf(lm[1]), lm.index + lm[0].indexOf(lm[1]) + lm[1].length));
+    if(has(/\bmisto\b/)) C.tipologia = "Misto"; else if(has(/\bempresarial|comercial|\bloja\b|empresa\b/)) C.tipologia = "Empresarial"; else if(has(/\bedificio\b|\bpredio\b|\bprédio\b/)) C.tipologia = "Edifício"; else if(has(/\bmoradia\b|vivenda/)) C.tipologia = "Moradia";
+    const fg = num(/(\d+)\s*(?:fogos?|fracoes|fracao|apartamentos?|casas|habitacoes)\b/); if(fg) C.fogos = fg;
+    const ps = num(/(\d+)\s*(?:pisos?|andares?)\b/); if(ps) C.pisos = ps;
+    const rg = n.match(/(?:do|de)\s*(?:piso\s*)?(-?\d+|res do chao|r\/c|cave)\s*(?:a|ao|ate ao|ate o|ate)\s*(?:piso\s*|ao\s*)?(-?\d+)/);
+    const pos = [["ESQ",/\besquerd/],["DTO",/\bdireit/],["FRENTE",/\bfrente\b/],["TRAS",/\btras(eira)?s?\b/],["CENTRO",/\bcentro\b/]].filter(([,re]) => has(re)).map(([k]) => k);
+    if(rg || pos.length){
+      const conv = v => /res|r\/c/.test(v) ? 0 : v === "cave" ? -1 : +v;
+      let de = rg ? conv(rg[1]) : 0, ate = rg ? conv(rg[2]) : (C.pisos ? +C.pisos - 1 : 0);
+      if(pos.length) out.tip = { de, ate, pos };
+    }
+    if(has(/\binterior\b/)) C.entrada = "Interior"; else if(has(/subterran|enterrad/)) C.entrada = "Subterrânea"; else if(has(/\baerea\b|aereo/)) C.entrada = "Aérea"; else if(has(/\bfachada\b/)) C.entrada = "Fachada";
+    if(has(/\bsem ited\b|nao tem ited/)) C.ited = "Não"; else if(has(/\bited\b/)) C.ited = "Sim";
+  } else {
+    if(T.trim()) C.descricao = T.trim().charAt(0).toUpperCase() + T.trim().slice(1);
+  }
+  return out;
+}
+function applySpeech(text){
+  collectForm();
+  const r = parseSpeech(text, editing.tipo, editing._new);
+  if(r.tipo){ editing.tipo = r.tipo; }
+  const C = r.campos;
+  if(C.numero === "__SN__") C.numero = nextSN(C.rua || editing.campos?.rua || "");
+  editing.campos = Object.assign({}, editing.campos, C);
+  if(r.tip){ Object.assign(editing.campos, { tip_de:r.tip.de, tip_ate:r.tip.ate, tip_pos:r.tip.pos.join(" "), tip_extra:"" });
+    editing.campos.tipificacao = tipString(r.tip.de, r.tip.ate, r.tip.pos, "");
+    if(!editing.campos.fogos) editing.campos.fogos = String((r.tip.ate - r.tip.de + 1) * r.tip.pos.length);
+    if(!editing.campos.tipologia) editing.campos.tipologia = "Edifício"; }
+  if(r.obs) editing.obs = [editing.obs, r.obs].filter(Boolean).join(" · ");
+  if(editing._autoCode || (OWNER_TYPES.includes(editing.tipo) && /^(PT|E|M|O|CV)-\d+$/.test(editing.codigo))) { editing.codigo = nextCode(editing.tipo, editing.campos); editing._autoCode = true; }
+  const lab = k => TYPES[editing.tipo].fields.find(f => f.k === k)?.l || k;
+  const got = Object.entries(C).filter(([k]) => TYPES[editing.tipo].fields.some(f => f.k === k)).map(([k,v]) => `${lab(k)}: ${k === "numero" ? editing.campos.numero : v}`);
+  if(r.tip) got.push(`Tipificação: ${editing.campos.tipificacao}`); if(r.obs) got.push("Observações");
+  renderTypePick(); renderDyn();
+  $("#f-codigo").value = editing.codigo; $("#f-obs").value = editing.obs || "";
+  if(editing.tipo === "edificio" && C.rua && $("#d-rua")) $("#d-rua").dispatchEvent(new Event("change"));
+  const live = $("#voiceLive"); live.hidden = false;
+  live.innerHTML = `«${esc(text)}»<br><b>${got.length ? "Preenchi — " + esc(got.join(" · ")) : "Não reconheci nenhum campo. Tenta dizer, por exemplo: «betão, 9 metros, esforço 400»."}</b>`;
+}
+$("#btnVoice").onclick = () => listen($("#btnVoice"), $("#voiceLive"), "🎤 Ditar a informação", applySpeech);
+$("#nVoice").onclick = () => listen($("#nVoice"), $("#nVoiceLive"), "🎤 Ditar", t => { const ta = $("#n-texto"), s = t.charAt(0).toUpperCase() + t.slice(1); ta.value = ta.value ? ta.value.replace(/\s*$/, "") + " " + s : s; $("#nVoiceLive").textContent = "«" + t + "»"; if(!$("#n-titulo").value) $("#n-titulo").value = s.split(/\s+/).slice(0, 5).join(" "); });
 
 /* =========================================================
    PROJETOS

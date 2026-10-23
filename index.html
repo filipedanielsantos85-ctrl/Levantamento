@@ -20,7 +20,7 @@
 :root{
   --bg:#EEF0EA; --surface:#FFFFFF; --ink:#16232C; --muted:#5B6870; --line:#C9CFC6;
   --accent:#F0B400; --accent-ink:#16232C; --danger:#B3261E; --ok:#2E7D4F;
-  --t-poste:#9A5B1E; --t-camara:#2F5D8A; --t-pdo:#2E7D4F; --t-edificio:#7A3E8F; --t-outro:#5B6870;
+  --t-poste:#9A5B1E; --t-postalete:#6B3E1A; --t-camara:#2F5D8A; --t-pdo:#2E7D4F; --t-edificio:#7A3E8F; --t-outro:#5B6870;
   --hdr:58px; --nav:62px;
   color-scheme: light;
 }
@@ -28,7 +28,7 @@
   :root{
     --bg:#10181D; --surface:#19242B; --ink:#E8ECE6; --muted:#9AA6AC; --line:#2F3D45;
     --accent:#F5C02E; --accent-ink:#10181D; --danger:#F2867E; --ok:#6FCF97;
-    --t-poste:#D8964F; --t-camara:#6FA3D6; --t-pdo:#6FCF97; --t-edificio:#C792DB; --t-outro:#9AA6AC;
+    --t-poste:#D8964F; --t-postalete:#B07A4A; --t-camara:#6FA3D6; --t-pdo:#6FCF97; --t-edificio:#C792DB; --t-outro:#9AA6AC;
     color-scheme: dark;
   }
 }
@@ -580,7 +580,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v23";
+const APP_VERSION = "v24";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -592,6 +592,14 @@ const TYPES = {
     {k:"estado", l:"Estado", t:"seg", o:["Bom","Razoável","Mau"]},
     {k:"cabos", l:"Nº de cabos existentes", t:"num"},
     {k:"espaco", l:"Espaço para nova ferragem", t:"seg", o:["Sim","Não","A verificar"]}
+  ]},
+  postalete: { label:"Postalete", prefix:"PL", color:"--t-postalete", hex:"#6B3E1A", dxf:32, fields:[
+    {k:"proprietario", l:"Proprietário", t:"seg", o:["MEO/PTC","E-Redes","Município","Outro"]},
+    {k:"ref", l:"Nº / placa", t:"text"},
+    {k:"fixacao", l:"Fixação", t:"seg", o:["Fachada","Telhado","Muro","Outro"]},
+    {k:"altura", l:"Altura (m)", t:"num"},
+    {k:"estado", l:"Estado", t:"seg", o:["Bom","Razoável","Mau"]},
+    {k:"cabos", l:"Nº de cabos existentes", t:"num"}
   ]},
   camara: { label:"Câmara de visita", prefix:"CV", color:"--t-camara", hex:"#2F5D8A", dxf:5, fields:[
     {k:"tipo", l:"Tipo", t:"seg", o:["CVR","CVP","Caixa","Outra"]},
@@ -778,8 +786,9 @@ function renderMarkers(){
   markersLayer.clearLayers();
   PR().filter(r => r.lat!=null).forEach(r => {
     const T = TYPES[r.tipo] || TYPES.outro;
-    const m = L.circleMarker([r.lat, r.lon], { radius:9, color:"#fff", weight:2.5, fillColor:recColor(r), fillOpacity:1 });
-    m.bindTooltip(esc(r.codigo), { permanent:true, direction:"right", offset:[8,0], className:"lbl" });
+    const m = L.circleMarker([r.lat, r.lon], { radius: r.tipo === "postalete" ? 7 : 9, color:"#fff", weight:2.5, fillColor:recColor(r), fillOpacity:1 });
+    const lbl = r.tipo === "edificio" ? (r.campos?.numero ? "nº " + r.campos.numero : r.codigo) : r.codigo;
+    m.bindTooltip(esc(lbl), { permanent:true, direction:"right", offset:[8,0], className:"lbl" });
     const sub = r.tipo==="edificio" ? [r.campos?.rua, r.campos?.numero].filter(Boolean).join(" ") : (r.campos?.ref || r.campos?.tipo || "");
     const html = `<div class="pop-code">${esc(r.codigo)}</div><div class="pop-meta">${esc(T.label)}${sub?" · "+esc(sub):""}</div><button class="pop-btn" data-open="${r.id}">Abrir registo</button><button class="pop-btn2" data-recmove="${r.id}">Mover</button><button class="pop-del" style="margin-top:6px" data-recdel="${r.id}">Apagar</button>`;
     m.on("click", ev => {
@@ -951,6 +960,7 @@ function guessType(it){
   if(/c[âa]mara|\bcv[rp]?\b|^cv-/i.test(s)) return "camara";
   if(/\bpdo\b|\bjfo\b|\bjso\b|caixa/.test(s)) return "pdo";
   if(/edif|morada|^ed-/i.test(s)) return "edificio";
+  if(/postalete|^pl-\d+/i.test(s)) return "postalete";
   if(/^(pt|e|m|o)-\d+$/i.test(n) || /poste/.test(s)) return "poste";
   return "outro";
 }
@@ -2071,7 +2081,7 @@ function parseSpeech(raw, tipo, isNew){
   if(m){ out.obs = T.slice(m.index + m[0].length).trim(); out.obs = out.obs.charAt(0).toUpperCase() + out.obs.slice(1); T = T.slice(0, m.index); n = deacc(T); }
   // tipo de elemento dito no início (só em registos novos)
   if(isNew){ const h = n.trim().split(/\s+/).slice(0, 2).join(" ");
-    const tt = /\bposte\b/.test(h) ? "poste" : /\b(camara|cvr|cvp)\b/.test(h) ? "camara" : /\b(pdo|jfo|jso|caixa)\b/.test(h) ? "pdo" : /\b(moradia|edificio|predio|morada|casa)\b/.test(h) ? "edificio" : null;
+    const tt = /\bpostalete\b/.test(h) ? "postalete" : /\bposte\b/.test(h) ? "poste" : /\b(camara|cvr|cvp)\b/.test(h) ? "camara" : /\b(pdo|jfo|jso|caixa)\b/.test(h) ? "pdo" : /\b(moradia|edificio|predio|morada|casa)\b/.test(h) ? "edificio" : null;
     if(tt && tt !== tipo){ out.tipo = tt; tipo = tt; } }
   const C = out.campos, has = re => re.test(n), num = re => { const x = n.match(re); return x ? x[1].replace(",", ".") : null; };
   const owner = () => { if(has(/\b(e-?redes|e redes|edp)\b/)) C.proprietario = "E-Redes"; else if(has(/\b(meo|ptc|altice)\b/) || has(/\bpt\b/)) C.proprietario = "MEO/PTC"; else if(has(/\bmunicipi|camara municipal\b/)) C.proprietario = "Município"; else if(has(/\boutro proprietario\b/)) C.proprietario = "Outro"; };
@@ -2084,6 +2094,11 @@ function parseSpeech(raw, tipo, isNew){
     const esf = num(/esforco\s*(?:de\s*)?(\d+)/) || num(/(\d+)\s*(?:deca ?newtons?|dan)\b/); if(esf) C.esforco = esf;
     const cab = num(/(\d+)\s*cabos?\b/); if(cab) C.cabos = cab;
     if(has(/\bsem espaco\b|nao (?:tem|ha) espaco/)) C.espaco = "Não"; else if(has(/\b(com|tem|ha) espaco\b/)) C.espaco = "Sim"; else if(has(/verificar espaco|espaco a verificar/)) C.espaco = "A verificar";
+  } else if(tipo === "postalete"){
+    owner(); ref(); estado();
+    if(has(/\bfachada\b|\bparede\b/)) C.fixacao = "Fachada"; else if(has(/\btelhado\b|\bcobertura\b/)) C.fixacao = "Telhado"; else if(has(/\bmuro\b/)) C.fixacao = "Muro";
+    const alt = num(/altura\s*(?:de\s*)?(\d+(?:[.,]\d+)?)/) || num(/(\d+(?:[.,]\d+)?)\s*(?:metros|metro|m)\b/); if(alt) C.altura = alt;
+    const cab = num(/(\d+)\s*cabos?\b/); if(cab) C.cabos = cab;
   } else if(tipo === "camara"){
     owner(); ref(); estado();
     if(has(/\bcvr\b/)) C.tipo = "CVR"; else if(has(/\bcvp\b/)) C.tipo = "CVP"; else if(has(/\bcaixa\b/)) C.tipo = "Caixa";
@@ -2376,7 +2391,7 @@ function aciNearest(hex){
 // Texto DXF: acentos como \U+XXXX (o AutoCAD lê-os corretamente), sem quebras de linha, máx. 250 caracteres
 const dxfStr = v => String(v ?? "").replace(/[\r\n\t]+/g, " ").slice(0, 250).replace(/[^\x20-\x7E]/g, ch => "\\U+" + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0"));
 const ATAG = k => ascii(k).toUpperCase().replace(/[^A-Z0-9_]/g, "_");
-const DXF_BLK = { poste:"LEV_POSTE", camara:"LEV_CAMARA", pdo:"LEV_PDO", edificio:"LEV_EDIFICIO", outro:"LEV_OUTRO" };
+const DXF_BLK = { poste:"LEV_POSTE", postalete:"LEV_POSTALETE", camara:"LEV_CAMARA", pdo:"LEV_PDO", edificio:"LEV_EDIFICIO", outro:"LEV_OUTRO" };
 const recAttrTags = tipo => ["CODIGO", "TIPO", ...TYPES[tipo].fields.map(f => ATAG(f.k)), "OBS", "ORIGEM", "X_PTTM06", "Y_PTTM06", "DATA", "PROJETO", "TECNICO", "FOTOS"];
 const NOTA_TAGS = ["TITULO", "TIPO", "INFO", "AREA_M2", "DATA", "PROJETO", "FOTOS"];
 function buildDXF(){
@@ -2398,6 +2413,7 @@ function buildDXF(){
   const gC = r => { put(0,"CIRCLE"); put(8,"0"); put(62,0); put(10,0); put(20,0); put(30,0); put(40,r); };
   const GEOM = {
     poste: () => { gC(0.5); gL(-0.5,0,0.5,0); gL(0,-0.5,0,0.5); },
+    postalete: () => { gC(0.35); gL(-0.6,-0.5,0.6,-0.5); gL(0,-0.5,0,-0.35); },
     camara: () => { gL(-0.5,-0.5,0.5,-0.5); gL(0.5,-0.5,0.5,0.5); gL(0.5,0.5,-0.5,0.5); gL(-0.5,0.5,-0.5,-0.5); },
     pdo: () => { gL(-0.5,-0.4,0.5,-0.4); gL(0.5,-0.4,0,0.5); gL(0,0.5,-0.5,-0.4); },
     edificio: () => { gL(-0.5,-0.5,0.5,-0.5); gL(0.5,-0.5,0.5,0.5); gL(0.5,0.5,-0.5,0.5); gL(-0.5,0.5,-0.5,-0.5); gL(-0.5,-0.5,0.5,0.5); },

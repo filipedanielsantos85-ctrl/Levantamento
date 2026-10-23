@@ -219,6 +219,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
 .tipbuild .note{margin:8px 0 0}
 .voicebox{margin-bottom:14px}#voiceLive{margin:8px 0 0;font-size:14px}
 .voicebtn.listening{background:#D7261E;color:#fff;border-color:#D7261E}
+.admlbl{color:#6C2C8C !important;font-size:12px !important;background:rgba(255,255,255,.75) !important}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav) + 90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#16232C;color:#fff;padding:12px 18px;border-radius:10px;font-weight:500;z-index:2000;max-width:calc(100% - 32px);opacity:0;pointer-events:none;transition:opacity .2s;text-align:center}
 .toast.show{opacity:1}
 </style>
@@ -297,6 +298,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
     <div id="impList"></div>
     <label class="opt"><input type="checkbox" id="optSnap" checked> Ajustar ao desenho quando marco um ponto</label>
     <label class="opt"><input type="checkbox" id="optTxt" checked> Mostrar textos do desenho (com zoom)</label>
+    <label class="opt"><input type="checkbox" id="optAdmin"> Mostrar limites de freguesia</label>
     <button class="btn block" id="dwgClose">Fechar</button>
   </div>
 
@@ -344,6 +346,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
         <div class="gpsbox">
           <p class="gpsread" id="gpsRead">Sem coordenadas</p>
           <p class="gpssub" id="gpsSub"></p>
+          <p class="gpssub" id="admLine" style="margin-top:-8px;font-weight:600"></p>
           <button type="button" class="btn primary block" id="btnGps">Usar posição GPS</button>
           <div class="btnrow">
             <button type="button" class="btn" id="btnMove">Mover no mapa</button>
@@ -404,6 +407,12 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
       <h2>Técnico</h2>
       <div class="field"><label for="s-tec">Nome</label><input id="s-tec" type="text" placeholder="O teu nome"></div>
       <button class="btn primary block" id="btnSaveProj">Guardar</button>
+    </div>
+    <div class="panel">
+      <h2>Dados de referência (repositório)</h2>
+      <p>Limites de freguesia/concelho e códigos postais com coordenadas, lidos da pasta dados/ do GitHub. A app preenche a freguesia e o concelho de cada registo e sugere o código postal mais próximo, também sem rede.</p>
+      <p class="note" id="refInfo">A verificar…</p>
+      <button class="btn primary block" id="btnRefZone">Guardar dados da zona do mapa</button>
     </div>
     <div class="panel">
       <h2>Base de códigos postais (CTT)</h2>
@@ -580,7 +589,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v24";
+const APP_VERSION = "v25";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -696,6 +705,8 @@ const DB = {
   del: id => tx("rec","readwrite", s => s.delete(id)),
   clear: () => tx("rec","readwrite", s => s.clear()),
   getKV: k => tx("kv","readonly", s => s.get(k)),
+  keys: () => tx("kv","readonly", s => s.getAllKeys()),
+  delKV: k => tx("kv","readwrite", s => s.delete(k)),
   setKV: (k,v) => tx("kv","readwrite", s => s.put(v,k))
 };
 
@@ -721,7 +732,7 @@ function show(view){
   if(view==="mapa"){ setTimeout(() => map.invalidateSize(), 50); $("#btnMarkHere").hidden = !$("#sheet").hidden || !$("#dwgSheet").hidden; }
   if(view==="lista") renderList();
   if(view==="export") renderExport();
-  if(view==="proj"){ renderProjList(); ensureCtt().then(renderCttInfo); $("#s-tec").value = settings.tecnico; $("#s-gkey").value = settings.gkey || ""; }
+  if(view==="proj"){ renderProjList(); ensureCtt().then(renderCttInfo); refStatus(); $("#s-tec").value = settings.tecnico; $("#s-gkey").value = settings.gkey || ""; }
   if(view!=="mapa") scrollTo(0,0);
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => { cancelReloc(); if(drawing) endDraw(); if(editMode) endEdit(); notaPick = false; $("#notasMenu").hidden = true; if(notaEdit) closeNota(); hideSheet(); $("#dwgSheet").hidden = true; show(b.dataset.tab); }));
@@ -881,6 +892,7 @@ function zoomTo(o){
 $("#btnDwg").onclick = () => { hideSheet(); renderOvList(); $("#dwgSheet").hidden = false; $("#btnMarkHere").hidden = true; };
 $("#dwgClose").onclick = () => { $("#dwgSheet").hidden = true; $("#btnMarkHere").hidden = false; };
 $("#optTxt").onchange = renderTexts;
+$("#optAdmin").onchange = async () => { settings.showAdmin = $("#optAdmin").checked; await saveSettings(); adminShown = ""; renderAdmin(); if(settings.showAdmin && map.getZoom() < 11) toast("Aproxima o mapa para veres os limites."); };
 $("#inDxf").onchange = async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f) return;
   const head = await f.slice(0, 22).text();
@@ -1695,6 +1707,7 @@ function renderGps(){
   $("#gpsRead").textContent = `${editing.lat.toFixed(6)}, ${editing.lon.toFixed(6)}`;
   $("#gpsSub").innerHTML = `PT-TM06: X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)} · ` + (editing.acc!=null ? `<span class="${accClass(editing.acc)}">GPS ±${Math.round(editing.acc)} m</span>` : "marcado no mapa");
   lk.href = `https://www.google.com/maps/search/?api=1&query=${editing.lat.toFixed(7)},${editing.lon.toFixed(7)}`; lk.hidden = false;
+  updAdminLine();
 }
 $("#btnGps").onclick = async () => {
   if(!startGps()) return;
@@ -1738,6 +1751,7 @@ $("#form").onsubmit = async e => {
   if(editing.cor && orig && (orig.tipo !== editing.tipo || (orig.campos?.proprietario||"") !== (editing.campos?.proprietario||""))) delete editing.cor;
   const rec = Object.assign({}, editing, { atualizado:now, criado:editing.criado||now, projeto:editing.projeto||settings.projeto, tecnico:editing.tecnico||settings.tecnico });
   delete rec._new; delete rec._autoCode; delete rec._prefill; delete rec._geoDone;
+  if(rec.lat != null){ try { const a = await adminAt(rec.lat, rec.lon); if(a) rec.admin = a; } catch {} }
   try { await DB.put(rec); } catch { toast("Não foi possível guardar. O espaço do dispositivo pode estar cheio."); return; }
   const i = records.findIndex(r => r.id===rec.id); if(i>=0) records[i]=rec; else records.push(rec);
   editing = null; renderMarkers(); show(returnTo); toast(`${rec.codigo} guardado.`);
@@ -1850,7 +1864,11 @@ function hookCtt(){
   };
   let tmr;
   rua.addEventListener("input", async () => {
-    await ensureCtt(); if(!ctt) return;
+    await ensureCtt();
+    if(!ctt){ const R = await refRuas(), q = cttNorm(rua.value), dl = $("#ruaList"); if(!R) return;
+      if(q.length < 4){ dl.innerHTML = ""; return; }
+      const hits = []; for(let i = 0; i < R.norms.length && hits.length < 30; i++) if(R.norms[i].includes(q)) hits.push(R.names[i]);
+      dl.innerHTML = hits.map(n => `<option value="${esc(n)}"></option>`).join(""); return; }
     const q = cttNorm(rua.value), dl = $("#ruaList");
     if(q.length < 3){ dl.innerHTML = ""; return; }
     const hits = ctt.streets.filter(s => s.n.includes(q)).slice(0, 30);
@@ -2025,11 +2043,11 @@ async function reverseGeocode(lat, lon){
 async function fillMoradaFromLocation(auto){
   const rua = $("#d-rua"), num = $("#d-numero"), cp = $("#d-cp"), loc = $("#d-localidade"), note = $("#geoNote");
   if(!rua || editing.lat == null){ if(!auto) toast("Este registo ainda não tem posição."); return; }
-  if(!navigator.onLine){ if(!auto) toast("A morada pela localização precisa de rede."); return; }
+  if(!navigator.onLine){ await cpNearFill(!auto); if(!auto && !$("#d-cp").value) toast("Sem rede: só consigo sugerir o código postal mais próximo."); return; }
   note.hidden = false; note.textContent = "A procurar a morada deste ponto…";
   let g; try { g = await reverseGeocode(editing.lat, editing.lon); } catch { note.textContent = "Não foi possível obter a morada (sem resposta do OpenStreetMap)."; return; }
   if(!$("#d-rua") || $("#d-rua") !== rua) return; // a ficha mudou entretanto
-  if(!g.rua){ note.textContent = "O OpenStreetMap não tem rua para este ponto. Escreve-a ou dita-a."; return; }
+  if(!g.rua){ note.textContent = "O OpenStreetMap não tem rua para este ponto. Escreve-a ou dita-a."; await cpNearFill(false); return; }
   if(auto && rua.value && sameStreet(rua.value, g.rua)){ note.hidden = true; return; } // a morada copiada já é desta rua
   rua.value = g.rua; if(g.numero && !num.value) num.value = g.numero;
   if(g.localidade) loc.value = g.localidade;
@@ -2037,6 +2055,7 @@ async function fillMoradaFromLocation(auto){
   $("#prefillNote")?.remove();
   note.textContent = `📍 Morada sugerida pela localização (OpenStreetMap)${g.numero ? "" : ", sem nº de polícia"}. Confirma.`;
   rua.dispatchEvent(new Event("change")); num.dispatchEvent(new Event("input"));
+  if(!g.cp) setTimeout(() => cpNearFill(false), 700);
 }
 
 /* ---------- Ditado por voz: preenche a ficha a partir do que dizes ---------- */
@@ -2166,6 +2185,122 @@ function applySpeech(text){
 $("#btnVoice").onclick = () => listen($("#btnVoice"), $("#voiceLive"), "🎤 Ditar a informação", applySpeech);
 $("#nVoice").onclick = () => listen($("#nVoice"), $("#nVoiceLive"), "🎤 Ditar", t => { const ta = $("#n-texto"), s = t.charAt(0).toUpperCase() + t.slice(1); ta.value = ta.value ? ta.value.replace(/\s*$/, "") + " " + s : s; $("#nVoiceLive").textContent = "«" + t + "»"; if(!$("#n-titulo").value) $("#n-titulo").value = s.split(/\s+/).slice(0, 5).join(" "); });
 
+/* ---------- Dados de referência do repositório (pasta dados/): limites administrativos, CP com coordenadas, ruas ---------- */
+const REF_BASE = "dados/";
+let refIdx = null; const refMem = new Map();
+async function refIndex(){
+  if(refIdx !== null) return refIdx;
+  let stored = null; try { stored = await DB.getKV("ref:index.json"); } catch {}
+  if(navigator.onLine && location.protocol !== "file:"){
+    try {
+      const r = await fetch(REF_BASE + "index.json?t=" + Date.now(), { cache:"no-store" });
+      if(r.ok){ const fresh = await r.json();
+        if(!stored || stored.versao !== fresh.versao){ // dados novos no repositório: limpa os antigos guardados
+          try { for(const k of await DB.keys()) if(String(k).startsWith("ref:")) await DB.delKV(k); } catch {}
+        }
+        try { await DB.setKV("ref:index.json", fresh); } catch {}
+        stored = fresh; }
+    } catch {}
+  }
+  refIdx = stored || false; return refIdx;
+}
+async function refGet(file){
+  if(refMem.has(file)) return refMem.get(file);
+  let d = null; try { d = await DB.getKV("ref:" + file); } catch {}
+  if(!d && navigator.onLine){ try { const r = await fetch(REF_BASE + file); if(r.ok){ d = await r.json(); try { await DB.setKV("ref:" + file, d); } catch {} } else if(r.status === 404){ refMem.set(file, null); return null; } } catch {} }
+  if(d) refMem.set(file, d); return d;
+}
+const bbHas = (bb, lat, lon, pad = 0) => lon >= bb[0]-pad && lat >= bb[1]-pad && lon <= bb[2]+pad && lat <= bb[3]+pad;
+function decRing(e){ const out = []; let x = 0, y = 0; for(let i = 0; i < e.length; i += 2){ x += e[i]; y += e[i+1]; out.push([y/1e5, x/1e5]); } return out; }
+function inRing(lat, lon, ring){
+  let ins = false;
+  for(let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const yi = ring[i][0], xi = ring[i][1], yj = ring[j][0], xj = ring[j][1];
+    if(((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) ins = !ins;
+  }
+  return ins;
+}
+async function adminAt(lat, lon){
+  if(lat == null) return null;
+  const idx = await refIndex(); if(!idx) return null;
+  for(const [dist, e] of Object.entries(idx.admin)){
+    if(!bbHas(e.bb, lat, lon)) continue;
+    const rows = await refGet(e.f); if(!rows) continue;
+    for(const r of rows){ if(!bbHas(r[2], lat, lon)) continue; if(!r._ring) r._ring = decRing(r[3]);
+      if(inRing(lat, lon, r._ring)) return { distrito:dist, concelho:r[0], freguesia:r[1] }; }
+  }
+  return null;
+}
+async function cpNear(lat, lon, k = 4){
+  const idx = await refIndex(); if(!idx) return [];
+  const cos = Math.cos(lat * Math.PI/180), best = new Map();
+  for(const e of Object.values(idx.cp)){
+    if(!bbHas(e.bb, lat, lon, 0.03)) continue;
+    const d = await refGet(e.f); if(!d) continue;
+    for(const p of d.p){ const dy = (p[1]/1e5 - lat) * 111320, dx = (p[2]/1e5 - lon) * 111320 * cos, dist = Math.hypot(dx, dy);
+      const cur = best.get(p[0]); if(!cur || dist < cur.dist) best.set(p[0], { cp:p[0], dist, lugar:p[3], desig:d.d[p[0]] || p[3] }); }
+  }
+  return [...best.values()].sort((a,b) => a.dist - b.dist).slice(0, k);
+}
+let ruasRef = null;
+async function refRuas(){ if(ruasRef) return ruasRef; const idx = await refIndex(); if(!idx) return null; const a = await refGet(idx.ruas || "ruas.json"); if(!a) return null; ruasRef = { names:a, norms:a.map(cttNorm) }; return ruasRef; }
+async function cpNearFill(force){
+  const cp = $("#d-cp"), loc = $("#d-localidade"), box = $("#cpSug"); if(!cp || editing.lat == null) return;
+  if(cp.value && !force && cp.dataset.auto !== "1") return;
+  const near = await cpNear(editing.lat, editing.lon); if(!near.length || $("#d-cp") !== cp) return;
+  const fmtD = m => m < 1000 ? Math.round(m) + " m" : (m/1000).toFixed(1).replace(".", ",") + " km";
+  if(!cp.value || cp.dataset.auto === "1"){ cp.value = near[0].cp; cp.dataset.auto = "1"; if(near[0].desig && (!loc.value || loc.dataset.auto === "1")){ loc.value = near[0].desig; loc.dataset.auto = "1"; } }
+  box.innerHTML = `<p class="note">Códigos postais mais próximos deste ponto:</p>` + near.map((s,i) => `<button type="button" data-i="${i}"><b>${esc(s.cp)}</b> ${esc(s.desig || "")}<small>${esc(s.lugar || "")} · a ${fmtD(s.dist)}</small></button>`).join("");
+  box.querySelectorAll("button").forEach(b => b.onclick = () => { const s = near[+b.dataset.i]; cp.value = s.cp; cp.dataset.auto = ""; if(s.desig) loc.value = s.desig; box.innerHTML = `<p class="cpok">✓ ${esc(s.cp)} ${esc(s.desig || "")}</p>`; });
+}
+async function updAdminLine(){
+  const el = $("#admLine"); if(!el || !editing) return;
+  if(editing.lat == null){ el.textContent = ""; return; }
+  const a = await adminAt(editing.lat, editing.lon);
+  if(a){ editing.admin = a; el.textContent = `${a.freguesia} · ${a.concelho} · ${a.distrito}`; }
+  else el.textContent = (await refIndex()) ? "" : "";
+}
+// limites de freguesia no mapa
+const adminLayer = L.layerGroup().addTo(map), adminRenderer = L.canvas({ padding:0.3 });
+let adminShown = "";
+async function renderAdmin(){
+  if(!settings.showAdmin || map.getZoom() < 11){ if(adminShown){ adminLayer.clearLayers(); adminShown = ""; } return; }
+  const idx = await refIndex(); if(!idx) return;
+  const b = map.getBounds(), want = Object.entries(idx.admin).filter(([,e]) => !(e.bb[0] > b.getEast() || e.bb[2] < b.getWest() || e.bb[1] > b.getNorth() || e.bb[3] < b.getSouth())).map(([d]) => d).sort();
+  const key = want.join("|") + (map.getZoom() >= 14 ? "+t" : ""); if(key === adminShown) return; adminShown = key;
+  adminLayer.clearLayers();
+  for(const d of want){ const rows = await refGet(idx.admin[d].f); if(!rows) continue;
+    rows.forEach(r => { if(!r._ring) r._ring = decRing(r[3]);
+      const pg = L.polygon(r._ring, { renderer:adminRenderer, color:"#8E44AD", weight:1.6, dashArray:"5 4", fill:false, interactive:false }).addTo(adminLayer);
+      if(map.getZoom() >= 14) pg.bindTooltip(esc(r[1]), { permanent:true, direction:"center", className:"lbl admlbl" }); }); }
+}
+map.on("moveend", renderAdmin);
+async function refStatus(){
+  const el = $("#refInfo"); if(!el) return;
+  const idx = await refIndex();
+  if(!idx){ el.textContent = "A pasta dados/ não está no repositório (ou ainda não abriste a app com rede)."; return; }
+  let keys = []; try { keys = (await DB.keys()).map(String).filter(k => k.startsWith("ref:")); } catch {}
+  const dist = Object.entries(idx.admin).filter(([,e]) => keys.includes("ref:" + e.f)).map(([d]) => d);
+  const cps = Object.entries(idx.cp).filter(([,e]) => keys.includes("ref:" + e.f)).map(([p]) => p);
+  el.innerHTML = `Dados de ${esc(idx.versao)} · ${Object.keys(idx.admin).length} distritos e ${Object.keys(idx.cp).length} zonas de CP disponíveis.<br>Guardados neste aparelho: ${dist.length ? esc(dist.join(", ")) : "nenhum distrito"} · CP ${cps.length ? esc(cps.join(", ")) : "nenhum"}${keys.includes("ref:" + (idx.ruas || "ruas.json")) ? " · lista de ruas" : ""}.`;
+}
+$("#btnRefZone").onclick = async () => {
+  const idx = await refIndex(); if(!idx){ toast("Sem dados de referência no repositório."); return; }
+  if(!navigator.onLine){ toast("Precisas de rede para guardar os dados."); return; }
+  const b = map.getBounds(), hit = bb => !(bb[0] > b.getEast() || bb[2] < b.getWest() || bb[1] > b.getNorth() || bb[3] < b.getSouth());
+  const files = [...Object.values(idx.admin).filter(e => hit(e.bb)).map(e => e.f), ...Object.values(idx.cp).filter(e => hit(e.bb)).map(e => e.f), idx.ruas || "ruas.json"];
+  const btn = $("#btnRefZone"); btn.disabled = true; let i = 0;
+  for(const f of files){ btn.textContent = `A guardar ${++i}/${files.length}…`; await refGet(f); }
+  btn.disabled = false; btn.textContent = "Guardar dados da zona do mapa"; refStatus(); toast(`Guardados ${files.length} ficheiros de referência para usar sem rede.`);
+};
+// preencher freguesia/concelho nos registos que ainda não a têm (em segundo plano)
+async function backfillAdmin(){
+  if(!(await refIndex())) return;
+  for(const r of records.filter(x => x.lat != null && !x.admin && inActive(x)).slice(0, 300)){
+    const a = await adminAt(r.lat, r.lon); if(a){ r.admin = a; try { await DB.put(r); } catch {} }
+  }
+}
+
 /* =========================================================
    PROJETOS
    ========================================================= */
@@ -2259,13 +2394,13 @@ const sorted = () => PR().sort((a,b) => (a.tipo+a.codigo).localeCompare(b.tipo+b
 function buildCSV(){
   const q = v => { const s = String(v ?? ""); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
   const num = v => v==null || v==="" ? "" : String(v).replace(".", ",");
-  const head = ["Codigo","Tipo","Projeto","Tecnico","Criado","Atualizado","Latitude","Longitude","Origem_coord","Precisao_m","X_PTTM06","Y_PTTM06", ...ALL_KEYS.map(f=>f.l), "Observacoes","N_fotos","Fotos"];
+  const head = ["Codigo","Tipo","Projeto","Tecnico","Criado","Atualizado","Latitude","Longitude","Origem_coord","Precisao_m","X_PTTM06","Y_PTTM06","Distrito","Concelho","Freguesia", ...ALL_KEYS.map(f=>f.l), "Observacoes","N_fotos","Fotos"];
   const lines = [head.map(q).join(";")];
   sorted().forEach(r => {
     const p = r.lat!=null ? toPTTM06(r.lat, r.lon) : null;
     lines.push([r.codigo, TYPES[r.tipo]?.label, r.projeto, r.tecnico, fmtDate(r.criado), fmtDate(r.atualizado),
       p?num(r.lat.toFixed(7)):"", p?num(r.lon.toFixed(7)):"", p?(r.acc!=null?"GPS":"Mapa"):"", r.acc!=null?Math.round(r.acc):"",
-      p?num(p.x.toFixed(2)):"", p?num(p.y.toFixed(2)):"",
+      p?num(p.x.toFixed(2)):"", p?num(p.y.toFixed(2)):"", r.admin?.distrito || "", r.admin?.concelho || "", r.admin?.freguesia || "",
       ...ALL_KEYS.map(f => { const v = r.campos?.[f.k]; return f.t==="num" ? num(v) : (v ?? ""); }),
       r.obs, r.fotos?.length||0, photoNames(r).join(" | ")].map(q).join(";"));
   });
@@ -2274,6 +2409,7 @@ function buildCSV(){
 function props(r){
   const o = { codigo:r.codigo, tipo:TYPES[r.tipo]?.label, projeto:r.projeto||"", tecnico:r.tecnico||"", criado:r.criado, atualizado:r.atualizado, origem:r.acc!=null?"GPS":"Mapa", precisao_m:r.acc!=null?Math.round(r.acc):null };
   TYPES[r.tipo]?.fields.forEach(f => { if(r.campos?.[f.k]!=null) o[f.k] = f.t==="num" ? Number(r.campos[f.k]) : r.campos[f.k]; });
+  if(r.admin){ o.distrito = r.admin.distrito; o.concelho = r.admin.concelho; o.freguesia = r.admin.freguesia; }
   o.observacoes = r.obs||""; o.fotos = photoNames(r);
   return o;
 }
@@ -2314,6 +2450,7 @@ function kmlDesc(r, withPhotos){
   const T = TYPES[r.tipo] || TYPES.outro, rows = [["Tipo", T.label]];
   T.fields.forEach(f => { const v = r.campos?.[f.k]; if(v!=null && v!=="") rows.push([f.l, v]); });
   if(r.lat!=null){ const p = toPTTM06(r.lat, r.lon); rows.push(["PT-TM06", `X ${p.x.toFixed(2)} · Y ${p.y.toFixed(2)}`]); }
+  if(r.admin) rows.push(["Freguesia", `${r.admin.freguesia} (${r.admin.concelho})`]);
   rows.push(["Origem", r.acc!=null ? `GPS ±${Math.round(r.acc)} m` : "Marcado no mapa"]);
   if(r.projeto) rows.push(["Projeto", r.projeto]);
   if(r.tecnico) rows.push(["Técnico", r.tecnico]);
@@ -2392,7 +2529,7 @@ function aciNearest(hex){
 const dxfStr = v => String(v ?? "").replace(/[\r\n\t]+/g, " ").slice(0, 250).replace(/[^\x20-\x7E]/g, ch => "\\U+" + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, "0"));
 const ATAG = k => ascii(k).toUpperCase().replace(/[^A-Z0-9_]/g, "_");
 const DXF_BLK = { poste:"LEV_POSTE", postalete:"LEV_POSTALETE", camara:"LEV_CAMARA", pdo:"LEV_PDO", edificio:"LEV_EDIFICIO", outro:"LEV_OUTRO" };
-const recAttrTags = tipo => ["CODIGO", "TIPO", ...TYPES[tipo].fields.map(f => ATAG(f.k)), "OBS", "ORIGEM", "X_PTTM06", "Y_PTTM06", "DATA", "PROJETO", "TECNICO", "FOTOS"];
+const recAttrTags = tipo => ["CODIGO", "TIPO", ...TYPES[tipo].fields.map(f => ATAG(f.k)), "OBS", "ORIGEM", "X_PTTM06", "Y_PTTM06", "FREGUESIA", "CONCELHO", "DISTRITO", "DATA", "PROJETO", "TECNICO", "FOTOS"];
 const NOTA_TAGS = ["TITULO", "TIPO", "INFO", "AREA_M2", "DATA", "PROJETO", "FOTOS"];
 function buildDXF(){
   const L = [], put = (c,v) => L.push(String(c), String(v));
@@ -2444,6 +2581,7 @@ function buildDXF(){
     const vals = [["CODIGO", r.codigo], ["TIPO", T.label],
       ...T.fields.map(f => [ATAG(f.k), f.k === "proprietario" && r.tipo === "poste" ? ownerOf(r) : (r.campos?.[f.k] ?? "")]),
       ["OBS", r.obs || ""], ["ORIGEM", r.acc != null ? `GPS ${Math.round(r.acc)} m` : "Mapa"], ["X_PTTM06", p.x.toFixed(2)], ["Y_PTTM06", p.y.toFixed(2)],
+      ["FREGUESIA", r.admin?.freguesia || ""], ["CONCELHO", r.admin?.concelho || ""], ["DISTRITO", r.admin?.distrito || ""],
       ["DATA", fmtDate(r.atualizado)], ["PROJETO", r.projeto || ""], ["TECNICO", r.tecnico || ""], ["FOTOS", photoNames(r).map(n => n.split("/").pop()).join(" | ")]];
     insertBlk(DXF_BLK[r.tipo] || "LEV_OUTRO", lay, p.x, p.y, vals, color);
   });
@@ -2577,6 +2715,7 @@ $("#inImport").onchange = async e => {
   else if(PR().some(r => r.lat!=null)) map.fitBounds(PR().filter(r=>r.lat!=null).map(r=>[r.lat,r.lon]), { maxZoom:18, padding:[40,40] });
   firstFix = true;
   renderHeader(); renderMarkers(); renderTracados(); renderNotas();
+  $("#optAdmin").checked = !!settings.showAdmin; renderAdmin(); setTimeout(backfillAdmin, 4000);
   try { if(navigator.storage?.persist){ const p = await navigator.storage.persist(); $("#persistInfo").textContent = p ? "O navegador confirmou que mantém os dados guardados." : "O navegador pode limpar dados se faltar espaço: exporta no fim de cada dia."; } } catch {}
   startGps();
 })();

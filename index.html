@@ -305,6 +305,7 @@ nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--acc
   <div class="sheet" id="kmlSheet" hidden>
     <h2 id="kmlTitle">KML</h2>
     <p class="coords" id="kmlInfo"></p>
+    <p class="prefill" id="kmlHint" hidden>Este ficheiro parece ser de <b>referência</b> (cartas, limites, cabos existentes…). Nesse caso, usa <b>"Usar só como referência"</b>: fica por cima do mapa sem se misturar com os teus registos e traçados.</p>
     <button class="btn primary block" id="kmlImport">Importar para o projeto (editável)</button>
     <p class="note" style="margin:6px 0 0">Pontos passam a registos (com fotos, se for KMZ) e linhas a traçados. Polígonos ficam como referência.</p>
     <button class="btn block" id="kmlRef">Usar só como referência por cima do mapa</button>
@@ -589,7 +590,7 @@ function dxfToOverlay(name, txt){
   return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
 }
 
-const APP_VERSION = "v25";
+const APP_VERSION = "v26";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -789,8 +790,12 @@ $("#btnLayer").onclick = async () => {
 };
 
 const markersLayer = L.layerGroup().addTo(map);
-function updateLabels(){ map.getContainer().classList.toggle("nolabels", map.getZoom() < 17); }
-map.on("zoomend", updateLabels);
+function updateLabels(){
+  const z = map.getZoom(); let hide = z < 13;
+  if(!hide && z < 17){ const b = map.getBounds(); let n = 0; for(const r of PR()){ if(r.lat != null && b.contains([r.lat, r.lon]) && ++n > 150) break; } hide = n > 150; }
+  map.getContainer().classList.toggle("nolabels", hide);
+}
+map.on("zoomend moveend", updateLabels);
 map.on("moveend", () => { const c = map.getCenter(); settings.view = [c.lat, c.lng, map.getZoom()]; saveSettings(); });
 
 function renderMarkers(){
@@ -841,7 +846,7 @@ function renderOverlays(){
         L.circle(e.p, { renderer:dwgRenderer, radius:e.r, color:col, weight:2, fill:false, interactive:false }).addTo(dwgGroup);
         snapPts.push({ ll:e.p, lbl:L0.n });
       } else if(e.t==="P"){
-        L.circleMarker(e.p, { renderer:dwgRenderer, radius:e.n?5:3, color:col, weight:2, fillColor:col, fillOpacity:e.n?.25:1, interactive:false }).addTo(dwgGroup);
+        L.circleMarker(e.p, { renderer:dwgRenderer, radius:e.n?6:3, color: e.n ? "#16232C" : col, weight: e.n ? 1.5 : 2, fillColor:col, fillOpacity:1, interactive:false }).addTo(dwgGroup);
         snapPts.push({ ll:e.p, lbl: e.n ? (e.n + (e.a ? " · " + e.a : "")) : L0.n, attr:e.a || "" });
       } else if(e.t==="T"){
         textPts.push(e);
@@ -853,8 +858,10 @@ function renderOverlays(){
 }
 function renderTexts(){
   dwgTexts.clearLayers();
-  if(!$("#optTxt").checked || map.getZoom() < 18) return;
-  const b = map.getBounds().pad(0.2); let n = 0;
+  const z = map.getZoom(); if(!$("#optTxt").checked || z < 12) return;
+  const b = map.getBounds().pad(0.2);
+  if(z < 15){ let c = 0; for(const e of textPts){ if(b.contains(e.p) && ++c > 150) return; } }
+  let n = 0;
   for(const e of textPts){
     if(!b.contains(e.p)) continue;
     L.marker(e.p, { interactive:false, keyboard:false, icon:L.divIcon({ className:"", html:`<span class="dwg-txt">${esc(e.s)}</span>`, iconSize:null, iconAnchor:[0,8] }) }).addTo(dwgTexts);
@@ -946,7 +953,7 @@ function parseKML(doc){
       if(p.localName === "Folder"){ const n = childText(p, "name").replace(/\s*\(\d+\).*$/, ""); if(n) folders.unshift(n); }
     const st = Object.assign({}, styles[childText(pm, "styleUrl")] || {});
     const inl = childEl(pm, "Style"); if(inl){ const o = styleOf(inl); Object.keys(o).forEach(k => { if(o[k]) st[k] = o[k]; }); }
-    tags(pm, "Point").forEach(g => { const c = coords(g)[0]; if(c) items.push({ g:"P", name, desc, folders, color:st.icon, p:c }); });
+    tags(pm, "Point").forEach(g => { const c = coords(g)[0]; if(c) items.push({ g:"P", name, desc, folders, color:st.icon || "#FFD21F", p:c }); });
     tags(pm, "LineString").forEach(g => { const c = coords(g); if(c.length > 1) items.push({ g:"L", name, desc, folders, color:st.line, p:c }); });
     tags(pm, "Polygon").forEach(g => { const c = coords(tags(g, "outerBoundaryIs")[0] || g); if(c.length > 2) items.push({ g:"A", name, desc, folders, color:st.line || st.poly, p:c }); });
   });
@@ -1026,6 +1033,7 @@ async function importKmlEditable(){
   const near = p => { const r = records.find(x => (x.projeto||"") === proj && x.lat != null && haversine([x.lat, x.lon], p) < 0.5); return r ? r.codigo : ""; };
   for(const it of items.filter(i => i.g === "L")){
     const tipo = guessTrType(it);
+    if(/^kml_\d+$/i.test(it.name || "")) it.name = "";
     const nm = it.name && !tracados.some(t => t.nome === it.name && (t.projeto||"") === proj) ? it.name : nextTrName(tipo);
     if(tracados.some(t => t.nome === it.name && (t.projeto||"") === proj && t.pts.length === it.p.length)){ skip++; continue; }
     tracados.push({ id:uid(), nome:nm, tipo, cor: it.color || undefined, imp:impId, pts:it.p, nos:it.p.map(near), comprimento:Math.round(lineLength(it.p)*10)/10, projeto:proj, tecnico:settings.tecnico, criado:now, atualizado:now });
@@ -1050,6 +1058,8 @@ $("#inKml").onchange = async e => {
     const c = g => items.filter(i => i.g === g).length;
     $("#kmlTitle").textContent = kmlPending.name;
     $("#kmlInfo").textContent = `${c("P")} pontos · ${c("L")} linhas · ${c("A")} polígonos`;
+    const refLike = c("L") + c("A") > 40 || items.some(i => /carta|limite|aglomerado|existente|\.shp|bkb|link/i.test(i.folders.join(" ")));
+    $("#kmlHint").hidden = !refLike;
     $("#kmlImport").textContent = `Importar para "${settings.projeto}" (editável)`;
     $("#dwgSheet").hidden = true; $("#kmlSheet").hidden = false; $("#btnMarkHere").hidden = true;
   } catch(err) {

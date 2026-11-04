@@ -547,12 +547,13 @@ function parseDXF(txt){
         }
         case "POINT": out.push({...base, t:"P", xy:[num(e.g,10),num(e.g,20)], n:""}); break;
         case "INSERT": {
-          const name = get(e.g,2,""), at = [];
+          const name = get(e.g,2,""), at = [], att = {};
           if(get(e.g,66,"0")==="1"){
-            while(j<P && val(j)!=="SEQEND"){ const v = readEntity(); if(v.type==="ATTRIB"){ const t=get(v.g,1,""); if(t) at.push(get(v.g,2,"")+"="+t); } }
+            while(j<P && val(j)!=="SEQEND"){ const v = readEntity(); if(v.type==="ATTRIB"){ const t = get(v.g,1,"").trim(), tag = get(v.g,2,"");
+              if(t){ at.push(tag+"="+t); if(!(parseInt(get(v.g,70,"0"),10) & 1)) att[tag] = t; } } }
             if(j<P) readEntity();
           }
-          out.push({...base, t:"P", xy:[num(e.g,10),num(e.g,20)], n:name, a:at.join(" · ")}); break;
+          out.push({...base, t:"P", xy:[num(e.g,10),num(e.g,20)], n:name, a:at.join(" · "), at:att}); break;
         }
         case "TEXT": { const s = get(e.g,1,""); if(s) out.push({...base, t:"T", xy:[num(e.g,10),num(e.g,20)], s}); break; }
         case "MTEXT": {
@@ -565,6 +566,25 @@ function parseDXF(txt){
   return { layers, ents: out, bad };
 }
 
+/* Em cada tipo de bloco, escolhe o atributo que serve de nome: valores únicos, com letras e números (ex.: C58/J01/PLDP/80, P-719) */
+function autoLabelTags(ents){
+  const groups = {};
+  ents.forEach(e => { if(e.t === "P" && e.at) (groups[e.n || ""] = groups[e.n || ""] || []).push(e.at); });
+  const out = {};
+  for(const [n, arr] of Object.entries(groups)){
+    const tags = {}; arr.forEach(a => Object.entries(a).forEach(([t,v]) => (tags[t] = tags[t] || []).push(v)));
+    let best = null, bs = 0;
+    for(const [t, vals] of Object.entries(tags)){
+      const cov = vals.length / arr.length, uniq = new Set(vals).size / vals.length;
+      const alnum = vals.filter(v => /[a-z]/i.test(v) && /\d/.test(v)).length / vals.length;
+      const sc = cov * (uniq * 0.6 + alnum * 0.6) + (/IDENT|COD|REF|NUM|^N_|NOME|DESIG|ID$/i.test(t) ? 0.3 : 0) - (/FOTO|IMG|OBS/i.test(t) && alnum < 0.5 ? 0.3 : 0);
+      if(sc > bs){ bs = sc; best = t; }
+    }
+    if(best && bs > 0.45) out[n] = best;
+  }
+  return out;
+}
+const cleanLbl = v => String(v).split(/\s+\|\s+/)[0].trim();
 /* Converte para WGS84 em formato compacto */
 function dxfToOverlay(name, txt){
   const { layers, ents } = parseDXF(txt);
@@ -584,13 +604,13 @@ function dxfToOverlay(name, txt){
     if(e.t==="L") o.p = e.xy.map(conv); else o.p = conv(e.xy);
     if(e.t==="C") o.r = e.r;
     if(e.t==="T") o.s = e.s;
-    if(e.t==="P"){ if(e.n) o.n = e.n; if(e.a) o.a = e.a; }
+    if(e.t==="P"){ if(e.n) o.n = e.n; if(e.a) o.a = e.a; if(e.at && Object.keys(e.at).length) o.at = e.at; }
     return o;
   });
-  return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length };
+  return { id: Date.now().toString(36), name, visible:true, inPT, lays, ents:E, count:E.length, lblAuto: autoLabelTags(E) };
 }
 
-const APP_VERSION = "v26";
+const APP_VERSION = "v27";
 /* ---------- Tipos de elemento ---------- */
 const TYPES = {
   poste: { label:"Poste", prefix:"PT", color:"--t-poste", hex:"#9A5B1E", dxf:30, fields:[
@@ -848,6 +868,7 @@ function renderOverlays(){
       } else if(e.t==="P"){
         L.circleMarker(e.p, { renderer:dwgRenderer, radius:e.n?6:3, color: e.n ? "#16232C" : col, weight: e.n ? 1.5 : 2, fillColor:col, fillOpacity:1, interactive:false }).addTo(dwgGroup);
         snapPts.push({ ll:e.p, lbl: e.n ? (e.n + (e.a ? " · " + e.a : "")) : L0.n, attr:e.a || "" });
+        if(e.at && o.lblTag !== "-"){ const tg = (o.lblTag && e.at[o.lblTag]) ? o.lblTag : o.lblAuto?.[e.n]; if(tg && e.at[tg]) textPts.push({ p:e.p, s:cleanLbl(e.at[tg]) }); }
       } else if(e.t==="T"){
         textPts.push(e);
       }
@@ -885,9 +906,15 @@ function renderOvList(){
   box.innerHTML = overlays.map((o,i) => `<div class="ov">
     <div class="ov-head"><label><input type="checkbox" data-vis="${i}" ${o.visible?"checked":""}><span>${esc(o.name)}</span></label></div>
     <small>${o.count} elementos · ${o.lays.length} layers${o.inPT ? "" : " · ⚠ coordenadas fora de PT-TM06"}</small>
+    ${(() => { const tags = new Set(); o.ents.forEach(e => e.at && Object.keys(e.at).forEach(t => tags.add(t))); if(!tags.size) return "";
+      const auto = Object.values(o.lblAuto || {}).filter((v,k,a) => a.indexOf(v) === k).join(", ") || "nenhum";
+      return `<label class="lay" style="display:block">Nome dos blocos: <select data-lbl="${i}" style="max-width:100%;margin-top:4px;min-height:40px;border-radius:8px;border:1.5px solid var(--line);background:var(--bg)">
+        <option value="" ${!o.lblTag ? "selected" : ""}>Automático (${esc(auto)})</option><option value="-" ${o.lblTag === "-" ? "selected" : ""}>Não mostrar</option>
+        ${[...tags].sort().map(t => `<option value="${esc(t)}" ${o.lblTag === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`; })()}
     <details><summary>Layers</summary>${o.lays.map((L0,k) => `<label class="lay"><input type="checkbox" data-lay="${i}:${k}" ${L0.v?"checked":""}><i style="background:${L0.c}"></i>${esc(L0.n)}</label>`).join("")}</details>
     <div class="ov-actions"><button class="btn" data-go="${i}">Ir para o desenho</button><button class="btn danger" data-del="${i}">Remover desenho</button></div></div>`).join("");
   box.querySelectorAll("[data-vis]").forEach(c => c.onchange = () => { overlays[+c.dataset.vis].visible = c.checked; renderOverlays(); saveOverlays(); });
+  box.querySelectorAll("[data-lbl]").forEach(sl => sl.onchange = () => { overlays[+sl.dataset.lbl].lblTag = sl.value; renderOverlays(); saveOverlays(); });
   box.querySelectorAll("[data-lay]").forEach(c => c.onchange = () => { const [i,k] = c.dataset.lay.split(":").map(Number); overlays[i].lays[k].v = c.checked; renderOverlays(); saveOverlays(); });
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { zoomTo(overlays[+b.dataset.go]); $("#dwgSheet").hidden = true; $("#btnMarkHere").hidden = false; });
   box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { const o = overlays[+b.dataset.del]; if(!confirm(`Remover o desenho ${o.name}?`)) return; overlays.splice(+b.dataset.del,1); renderOverlays(); renderOvList(); saveOverlays(); });
